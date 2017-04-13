@@ -33,7 +33,7 @@ int Init_SPI0( uint8_t bitlen )
 	PRESETCTRL |= 0x01;
 	// SPI0のシステムクロック 36Mhz
 	SSP0CLKDIV = 1;
-	// SPI0の bit frequency 9Mhz
+	// SPI0の bit frequency 18Mhz
 	SSP0CPSR = 2;
 
 	// 1回でやり取りするデータ長

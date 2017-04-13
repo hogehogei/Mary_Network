@@ -234,7 +234,7 @@ void Reset_ENC28J60(void)
 {
 	SPI0_TxRx( _SRC() );
 	Systick_Wait( 1 );   // リセット後50us 以上待つ必要があるとのことなので、1ms待つ
-    while( !(ReadCR(ESTAT) & 0x01) ) ;    // ClockReady になるまで待つ
+	while( !(ReadCR(ESTAT) & 0x01) ) ;    // ClockReady になるまで待つ
 
 	// PHYをリセット
 	// PHY FullDuplex Mode
@@ -247,7 +247,7 @@ void Init_PHY_ENC28J60(void)
 {
 	// LANポートのLED設定
 	// PHLCON に書く値 low 8bit, LEDB blink fast
-    // PHLCON に書く値 high 8bit, LEDA blink fast
+	// PHLCON に書く値 high 8bit, LEDA blink fast
 	//UART_Print( "PHY LED Setting" );
 	//WritePHYReg( PHLCON, 0x0A, 0xA2 );
 }

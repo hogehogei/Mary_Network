@@ -78,10 +78,21 @@ int ResetISR (void)
 	int led_idx = 0;
 	TurnOnLED( skLEDColorTbl[led_idx] );
 
-	uint32_t src_ip = ((192) << 24 | (168) << 16 | (20) << 8 | 150);
-	uint32_t dst_ip = ((192) << 24 | (168) << 16 | (20) << 8 | 50);
+	Host src = {
+			{ 0, },
+			{ 192, 168, 20, 150 }
+	};
+	Host dst = {
+			{ 0x90, 0x1B, 0x0E, 0x16, 0x47, 0x89 },
+			{ 192, 168, 20, 50 }
+	};
+	const uint8_t* srcmac = Get_MACAddr_ENC28J60();
+	int i = 0;
+	for( i = 0; i < 6; ++i ){
+		src.macaddr[i] = srcmac[i];
+	}
 
-	Packet* pkt = Create_ICMPEchoRequest( src_ip, dst_ip );
+	Packet* pkt = Create_ICMPEchoRequest( &src, &dst );
 	// main loop
 	while(1){
 		Systick_Wait( 1000 );
