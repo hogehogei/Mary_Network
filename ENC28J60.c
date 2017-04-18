@@ -11,6 +11,12 @@ static int sCurrentBank = 0;
 static uint8_t sTxPktBuf[1500] = {0};
 static Packet  sTxPkt;
 static int     sIsTxPktBufInuse = 0;
+// 受信用バッファ
+static uint8_t sRxPktBuf[1500] = {0};
+static Packet  sRxPkt;
+static int     sIsRxPktBufInuse = 0;
+
+static uint16_t sNextPacketPtr = RX_BUFFER_START;
 
 // MAC Address
 static uint8_t sMACAddr[6] = {
@@ -70,7 +76,7 @@ static uint8_t ReadCR( uint8_t reg )
 	return data;
 }
 
-static void WriteCR( uint8_t reg, uint8_t data )
+void WriteCR( uint8_t reg, uint8_t data )
 {
 	if( GETBANK(reg) != sCurrentBank ){
 		SwitchBank( GETBANK(reg) );
@@ -196,19 +202,41 @@ void Free_TxPktBuf_ENC28J60( Packet* packet )
 	sIsTxPktBufInuse = 0;
 }
 
-void SendPacket_ENC28J60( Packet* packet )
+Packet* Use_RxPktBuf_ENC28J60(void)
+{
+	if( sIsRxPktBufInuse ){
+		return 0;
+	}
+
+	sRxPkt.data = sRxPktBuf;
+	sRxPkt.len  = 0;
+
+	return &sRxPkt;
+}
+
+void Free_RxPktBuf_ENC28J60( Packet* packet )
+{
+	if( packet != (&sRxPkt) ){
+		return;
+	}
+	sIsRxPktBufInuse = 0;
+}
+
+void SendPacket_ENC28J60( const Packet* packet_out )
 {
 	// TXRTX:1 なら送信中なので待つ
 	while( ReadCR(ECON1) & 0x08 ) {
+		/*
 		// TXERIF : 送信エラー発生ならリセット
 		if( ReadCR(EIR) & 0x02 ){
 			BitFieldSet( ECON1, 0x80 );
 			BitFieldClear( ECON1, 0x80 );
 		}
+		*/
 	}
 
 	uint16_t tx_start_addr = TX_BUFFER_START;
-	uint16_t tx_end_addr = (TX_BUFFER_START + packet->len);
+	uint16_t tx_end_addr = (TX_BUFFER_START + packet_out->len);
 
 	// ENC28J60側の送信バッファ 書き込みスタートアドレス設定
 	WriteCR( EWRPTL, tx_start_addr & 0xFF );
@@ -223,12 +251,121 @@ void SendPacket_ENC28J60( Packet* packet )
 	// macon3 の設定をそのまま使用
 	uint8_t control_byte[1] = { 0x0E };
 	WriteBufferMem( control_byte, 1 );
-	WriteBufferMem( packet->data, packet->len );
+	WriteBufferMem( packet_out->data, packet_out->len );
 
 	BitFieldSet( ECON1, 0x08 );    // TXRTS: Transmit Request to Send Enable
 }
 
+int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in )
+{
+	uint8_t header[6] = {0, };
+	int status = 0;
 
+	WriteCR( ERDPTL, sNextPacketPtr & 0xFF );
+	WriteCR( ERDPTH, sNextPacketPtr >> 8 );
+
+	ReadBufferMem( header, 6 );    // next packet pointer + status vector を読む
+	sNextPacketPtr = header[0] | (header[1] << 8);
+	uint16_t recv_byte = header[2] | (header[3] << 8);
+	recv_byte -= 4;    // CRC は読まない
+
+	// status vector から CRC Error チェック
+	if( header[4] & (1 << 4) ){
+		status = RECV_CRCERR;
+	}
+	else if( !packet_in ){
+		// ドロップさせる
+		status = RECV_DROPPKT;
+	}
+	else {
+		status = RECV_VALIDPKT;
+		// 実際のデータを読む
+		ReadBufferMem( packet_in->data, recv_byte );
+		packet_in->len = recv_byte;
+	}
+
+
+	// 読み込みポインタを次のアドレスに進める
+	// Rev.B4 Errata シート参照
+	if( (sNextPacketPtr - 1) < RX_BUFFER_START || (sNextPacketPtr - 1) > RX_BUFFER_END ){
+		WriteCR( ERXRDPTL, RX_BUFFER_END & 0xFF );
+		WriteCR( ERXRDPTH, RX_BUFFER_END >> 8 );
+	}
+	else {
+		WriteCR( ERXRDPTL, (sNextPacketPtr - 1) & 0xFF );
+		WriteCR( ERXRDPTH, (sNextPacketPtr - 1) >> 8 );
+	}
+
+	// パケットを処理したので、パケットカウントを1つ減らす
+	BitFieldSet( ECON2, (1 << 6) );
+
+	return status;
+}
+
+int Get_RemainPacketCount(void)
+{
+	return ReadCR(EPKTCNT);
+}
+
+int RecvPacket_ENC28J60( Packet* packet_in )
+{
+	if( Get_RemainPacketCount() == 0 ){
+		return RECV_NOPKT;
+	}
+
+	return CopyPacketFromRecvBuffer_ENC28J60( packet_in );
+}
+
+int InterruptCallback_ENC28J60( Packet** packet_in )
+{
+	int status = 0;
+	uint8_t eir = ReadCR(EIR);
+
+	if( eir & PKTIF ){
+		if( sIsRxPktBufInuse ){
+			// パケットバッファが枯渇してるのでドロップさせる
+			*packet_in = 0;
+		}
+		else {
+			*packet_in = Use_RxPktBuf_ENC28J60();
+		}
+		status |= RecvPacket_ENC28J60( *packet_in );
+		// PKTIF は手動ではクリアしない、残パケットなしになったら自動でクリアされる
+	}
+	if( eir & LINKIF ){
+		status |= INT_LINKCHANGE;
+		ReadCR( PHIR );
+		// LINKIF はPHIRを読むと自動でクリアされる
+	}
+	if( eir & TXERIF ){
+		status |= INT_TXERROR;
+		// TXERIF: 送信エラー発生 Txリセット
+		BitFieldSet( ECON1, (1 << 7) );
+		BitFieldClear( ECON1, (1 << 7) );
+		BitFieldClear( EIR, TXERIF );
+	}
+	if( eir & RXERIF ){
+		status |= INT_RXERROR;
+		// RXERIF: 受信エラー発生 Rxリセット
+		BitFieldSet( ECON1, (1 << 6) );
+		BitFieldClear( ECON1, (1 << 6) );
+		// RXEN が自動でクリアされてしまうので再セット
+		BitFieldSet( ECON1, (1 << 2) );
+		BitFieldClear( EIR, RXERIF );
+	}
+
+	return status;
+}
+
+void EnableInterrupt_ENC28J60(void)
+{
+	BitFieldSet( EIE, (INT_ENABLE | PKTIF | TXERIF | RXERIF) );
+}
+
+void DisableInterrupt_ENC28J60(void)
+{
+	BitFieldClear( EIE, INT_ENABLE );
+}
 
 void Reset_ENC28J60(void)
 {
@@ -303,8 +440,11 @@ void Init_MAC_ENC28J60(void)
 
 void Init_Interrupt_ENC28J60(void)
 {
-	// 割り込み有効 : Receive packet pending 時
-	BitFieldSet( EIE, (1 << 7) | (1 << 6) );
+	// 割り込み有効
+	//DisableInterrupt_ENC28J60();
+	EnableInterrupt_ENC28J60();
+
+	UART_Print( "Interrupt Setting" );
 }
 
 void Init_EthControl_ENC28J60(void)
@@ -336,4 +476,8 @@ void Show_Setting_ENC28J60(void)
 	macaddr[4] = ReadCR(MAADR5);
 	macaddr[5] = ReadCR(MAADR6);
 	UART_HexPrint( macaddr, 6 ); UART_NewLine();
+
+	UART_Print( "** Interrupt setting" );
+	uint8_t eie = ReadCR(EIE);
+	UART_HexPrint( &eie, 1 ); UART_NewLine();
 }

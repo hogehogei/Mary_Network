@@ -159,8 +159,8 @@
 
 // Rx/Tx Buffer のサイズ設定 (0x0000 - 0x1FFF)
 #define    RX_BUFFER_START    ((uint16_t)(0x0000))
-#define    RX_BUFFER_END      ((uint16_t)(0x1FFF - 0x0600 - 1))
-#define    TX_BUFFER_START    ((uint16_t)(0x1FFF - 0x0600))
+#define    RX_BUFFER_END      ((uint16_t)(0x1FFF - 0x0600))
+#define    TX_BUFFER_START    ((uint16_t)(0x1FFF - 0x05FF))
 #define    TX_BUFFER_END      ((uint16_t)(0x1FFF))
 
 // 受信/送信できる最大フレーム長
@@ -175,12 +175,14 @@
 #define    MAC_MII_REGISTER_ACCESS_WAIT    (18)
 
 // Mac Address  52:54:00:12:FF:10
+// チップの中には書かれていないので、自分でMACアドレスを決める必要がある
 #define    MACADDR1    (0x52)
 #define    MACADDR2    (0x54)
 #define    MACADDR3    (0x00)
 #define    MACADDR4    (0x12)
 #define    MACADDR5    (0xFF)
 #define    MACADDR6    (0x10)
+
 
 //
 // Ethernet Controller ENC28J60 初期化
@@ -195,13 +197,46 @@ int Is_LinkUP_ENC28J60(void);
 const uint8_t* Get_MACAddr_ENC28J60(void);
 
 typedef struct _Packet Packet;
-// 送信用バッファ取得
+// 送信/受信用バッファ取得
 Packet* Use_TxPktBuf_ENC28J60(void);
 void Free_TxPktBuf_ENC28J60( Packet* packet );
+Packet* Use_RxPktBuf_ENC28J60(void);
+void Free_RxPktBuf_ENC28J60( Packet* packet );
 
 // Packet を送る
-void SendPacket_ENC28J60( Packet* packet );
+void SendPacket_ENC28J60( const Packet* packet_out );
 
+// Packet を受信する
+int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in );
+int Get_RemainPacketCount(void);
+int RecvPacket_ENC28J60( Packet* packet_in );
+
+
+enum InterruptFlag {
+	INT_ENABLE = (1 << 7),
+	PKTIF  = (1 << 6),
+	//DMAIF  = (1 << 5),    // 使わない
+	LINKIF = (1 << 4),
+	//TXIF   = (1 << 3),    // 使わない
+	TXERIF = (1 << 1),
+	RXERIF = (1 << 0)
+};
+enum ECN28J60_Result {
+	RECV_NOPKT = (1 << 0),
+	RECV_VALIDPKT = (1 << 1),
+	RECV_DROPPKT  = (1 << 2),
+	RECV_CRCERR   = (1 << 3),
+	INT_LINKCHANGE = (1 << 4),
+	INT_TXERROR = (1 << 5),
+	INT_RXERROR = (1 << 6)
+};
+
+// interrupt 有効/無効
+void EnableInterrupt_ENC28J60(void);
+void DisableInterrupt_ENC28J60(void);
+
+// 割り込み用コールバック
+int InterruptCallback_ENC28J60( Packet** packet_in );
 
 // 初期化ルーチン中で使用
 void Reset_ENC28J60(void);

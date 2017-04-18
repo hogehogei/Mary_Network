@@ -133,3 +133,14 @@ Packet* Create_ICMPEchoRequest( const Host* src, const Host* dst )
 	pktbuf->len = sizeof(Ether_Hdr) + sizeof(IP_Hdr) + icmp_field_len;
 	return pktbuf;
 }
+
+void Show_EtherHdr( const Ether_Hdr* hdr )
+{
+	UART_Print( "Ethernet Header" );
+	UART_Print( "destination macaddr" );
+	UART_HexPrint( hdr->macdst, 6 ); UART_NewLine();
+	UART_Print( "source macaddr" );
+	UART_HexPrint( hdr->macsrc, 6 ); UART_NewLine();
+	UART_Print( "type" );
+	UART_HexPrint( hdr->type, 2 ); UART_NewLine();
+}

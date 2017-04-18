@@ -145,9 +145,10 @@ int UART_Send( const uint8_t* tx, uint32_t len )
 	for( i = 0; i < len; ++i ){
 		//バッファが一杯なら空きがでるまで待つ
 		while( ((gUART_TxBufIdx + 1) % UART_BUFSIZE) == gUART_TxBufBegin ) {
-			//if( U0LSR & (1 << 6) ){
-			//	UART_SendByte();
-			//}
+			// マイコン側送信バッファを減らす
+			if( U0LSR & (1 << 6) ){
+				UART_SendByte();
+			}
 		}
 
 		__disable_irqn(UART_IRQn);

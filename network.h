@@ -18,7 +18,7 @@ typedef struct _Ether_Hdr {
 } Ether_Hdr;
 
 typedef struct _IP_Hdr {
-	uint8_t version_hdrlen;    // ARM CortexM0 はデフォルトは little endian
+	uint8_t version_hdrlen;
 	uint8_t tos;
 	uint8_t total_len[2];
 	uint8_t id[2];
@@ -61,8 +61,9 @@ void ICMP_StoreChecksum( ICMP_Hdr* icmphdr, uint32_t datalen );
 void Set_EtherHdr( Ether_Hdr* ethhdr, const uint8_t* macsrc, const uint8_t* macdst );
 void Set_Default_IPHdr( IP_Hdr* iphdr );
 ICMP_Hdr* Create_ICMPHdr( uint8_t* frame_head, const Host* src, const Host* dst, uint32_t datalen );
-
 // ICMP Echo Request のパケット作成
 Packet* Create_ICMPEchoRequest( const Host* src, const Host* dst );
+
+void Show_EtherHdr( const Ether_Hdr* hdr );
 
 #endif

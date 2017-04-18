@@ -28,6 +28,39 @@ static const uint32_t skLEDColorTbl[] = {
 		LED_COLOR_WHITE,
 };
 
+Packet* gRxPkt = 0;
+void RecvPacket(void)
+{
+	DisableInterrupt_ENC28J60();
+	int status = InterruptCallback_ENC28J60( &gRxPkt );
+
+	if( status & INT_LINKCHANGE ){
+		UART_Print( "PHY link status change" );
+	}
+	if( status & INT_RXERROR ){
+		UART_Print( "RxError, reset rx buffer" );
+	}
+	if( status & INT_TXERROR ){
+		UART_Print( "TxError, reset tx buffer" );
+	}
+	if( status & RECV_VALIDPKT ){
+		UART_Print( "Recv packet" );
+		Show_EtherHdr( (const Ether_Hdr*)gRxPkt->data );
+	}
+	if( status & RECV_DROPPKT ){
+		UART_Print( "RecvBuffer full. Drop packet" );
+	}
+	if( status & RECV_NOPKT ){
+		UART_Print( "No packet" );
+	}
+	if( status & RECV_CRCERR ){
+		UART_Print( "Received packet CRC is Uncorrect. drop." );
+	}
+
+	Free_RxPktBuf_ENC28J60( gRxPkt );
+	GPIO0IC |= _BV(3);
+	EnableInterrupt_ENC28J60();
+}
 
 //
 // エントリポイント
@@ -71,9 +104,19 @@ int ResetISR (void)
 	// SPI0の初期化
 	Init_SPI0( 8 );    // 8bit length
 	UART_Print( "Init_SPI()" );
+
+	// Mary側の割り込み PIO0_3 を割り込み判定に使用
+	// High->Low falling edge 時に検出
+	GPIO0IS  &= ~_BV(3);
+	GPIO0IBE &= ~_BV(3);
+	GPIO0IEV &= ~_BV(3);
+	GPIO0IE  |= _BV(3);
+	__enable_irqn( PIO_0_IRQn );
+
 	// ENC28J60 Eth Controller の初期化
 	Init_ENC28J60();
 	UART_Print( "Init_ENC28J60()" );
+
 
 	int led_idx = 0;
 	TurnOnLED( skLEDColorTbl[led_idx] );
@@ -191,7 +234,7 @@ void* const vector[] __attribute__ ((section(".isr_vector"))) =	/* Vector table 
 	trap,//PIO_3_IRQHandler,
 	trap,//PIO_2_IRQHandler,
 	trap,//PIO_1_IRQHandler,
-	trap //PIO_0_IRQHandler
+	RecvPacket //PIO_0_IRQHandler
 };
 
 
