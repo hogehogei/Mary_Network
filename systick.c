@@ -24,7 +24,10 @@ void Systick_Wait( uint32_t mill_sec )
 {
 	sSystick_WaitCalled = 1;
 	sSystick_WaitCnt = 0;
-	while( sSystick_WaitCnt < mill_sec ) ;
+	while( sSystick_WaitCnt < mill_sec ) {
+		// 次の割り込み開始まで待つ
+		asm("wfi");
+	}
 
 	sSystick_WaitCalled = 0;
 }

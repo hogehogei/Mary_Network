@@ -17,6 +17,18 @@ typedef struct _Ether_Hdr {
 	uint8_t data[0];
 } Ether_Hdr;
 
+typedef struct _ARP_Hdr {
+	uint8_t hw_type[2];
+	uint8_t protocol[2];
+	uint8_t hlen;
+	uint8_t plen;
+	uint8_t op_code[2];
+	uint8_t macsrc[6];
+	uint8_t ipsrc[4];
+	uint8_t macdst[6];
+	uint8_t ipdst[4];
+} ARP_Hdr;
+
 typedef struct _IP_Hdr {
 	uint8_t version_hdrlen;
 	uint8_t tos;
@@ -39,14 +51,10 @@ typedef struct _ICMP_Hdr {
 	uint8_t data[0];
 } ICMP_Hdr;
 
-typedef struct _Packet {
-	uint8_t* data;
-	uint32_t len;
-} Packet;
-
 typedef struct _Host {
 	uint8_t macaddr[6];
 	uint8_t ipaddr[4];
+	uint8_t netmask;    // CIDR で指定
 } Host;
 
 uint16_t Get_BEU16( const uint8_t* p );
@@ -58,11 +66,22 @@ uint16_t Checksum( const uint8_t* data, int len );
 void IP_StoreChecksum( IP_Hdr* iphdr );
 void ICMP_StoreChecksum( ICMP_Hdr* icmphdr, uint32_t datalen );
 
+int IsSameMacAddr( const uint8_t* mac_a, const uint8_t* mac_b );
+int IsBroadCastMacAddr( const uint8_t* macaddr );
+
 void Set_EtherHdr( Ether_Hdr* ethhdr, const uint8_t* macsrc, const uint8_t* macdst );
 void Set_Default_IPHdr( IP_Hdr* iphdr );
 ICMP_Hdr* Create_ICMPHdr( uint8_t* frame_head, const Host* src, const Host* dst, uint32_t datalen );
+
+typedef struct _Packet Packet;
 // ICMP Echo Request のパケット作成
 Packet* Create_ICMPEchoRequest( const Host* src, const Host* dst );
+// ARP Request 作成
+Packet* Create_ARPRequest( const Host* src, const Host* dst );
+
+int IsARPReply( const Packet* pkt );
+int IsICMPEchoReply( const Packet* pkt );
+void Process_ARPReply( const Packet* pkt, Host* dst );
 
 void Show_EtherHdr( const Ether_Hdr* hdr );
 

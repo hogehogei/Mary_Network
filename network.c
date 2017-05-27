@@ -3,6 +3,7 @@
 #include "uart.h"
 
 static uint16_t sPacketID = 0;
+static uint16_t sICMPEchoSeqID = 0;
 
 static uint16_t Get_IP_PktID(void)
 {
@@ -69,6 +70,32 @@ void ICMP_StoreChecksum( ICMP_Hdr* icmphdr, uint32_t datalen )
 	Store_BEU16( icmphdr->chksum, chksum );
 }
 
+int IsSameMacAddr( const uint8_t* mac_a, const uint8_t* mac_b )
+{
+	int result = 1;
+	int i = 0;
+	for( i = 0; i < 6; ++i ){
+		if( mac_a[i] != mac_b[i] ){
+			result = 0;
+		}
+	}
+
+	return result;
+}
+
+int IsBroadCastMacAddr( const uint8_t* macaddr )
+{
+	int result = 1;
+	int i = 0;
+	for( i = 0; i < 6; ++i ){
+		if( macaddr[i] != 0xFF ){
+			result = 0;
+		}
+	}
+
+	return result;
+}
+
 void Set_EtherHdr( Ether_Hdr* ethhdr, const uint8_t* macsrc, const uint8_t* macdst )
 {
 	// MAC Address 設定
@@ -116,22 +143,105 @@ Packet* Create_ICMPEchoRequest( const Host* src, const Host* dst )
 
 	uint16_t icmp_data_len = 32;  // ICMPデータは32byte
 	uint16_t icmp_field_len = icmp_data_len + sizeof(ICMP_Hdr);
+
 	// ICMP Header の作成
 	ICMP_Hdr* icmphdr = Create_ICMPHdr( pktbuf->data, src, dst,  icmp_data_len );
 	icmphdr->type = 0x08;      // ICMP Echo Request
 	icmphdr->code = 0x00;      // Code
-	Store_BEU16( icmphdr->data, 0x0100 );    // ICMP id
-	Store_BEU16( icmphdr->data+2, 0x0003 );  // ICMP sequence number
+	Store_BEU16( icmphdr->data, 0x0100 );          // ICMP id
+	Store_BEU16( icmphdr->data+2, ++sICMPEchoSeqID );  // ICMP sequence number
+
 	int i = 0;
 	// ダミーデータ作成  Windowsっぽい感じで
 	for( i = 0; i < 32; ++i ){
 		icmphdr->data[4+i] = 0x61 + (i % 0x17);
 	}
-	ICMP_StoreChecksum( icmphdr, icmp_field_len );
+	ICMP_StoreChecksum( icmphdr, icmp_data_len );
 
 	// パケットサイズを入れて返す
 	pktbuf->len = sizeof(Ether_Hdr) + sizeof(IP_Hdr) + icmp_field_len;
 	return pktbuf;
+}
+
+Packet* Create_ARPRequest( const Host* src, const Host* dst )
+{
+	// MACアドレスはブロードキャスト
+	uint8_t dstmac[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+
+	Packet* pkt = Use_TxPktBuf_ENC28J60();
+	Ether_Hdr* ethhdr = (Ether_Hdr*)pkt->data;
+	Set_EtherHdr( ethhdr, src->macaddr, dstmac );
+	Store_BEU16( ethhdr->type, 0x0806 );    // type: ARP
+
+	ARP_Hdr* arphdr = (ARP_Hdr*)ethhdr->data;
+	Store_BEU16( arphdr->hw_type, 0x0001 );    // Ethernet
+	Store_BEU16( arphdr->protocol, 0x0800 );   // TCP/IP
+	arphdr->hlen = 6;    // macaddress の長さ
+	arphdr->plen = 4;    // ipv4
+	Store_BEU16( arphdr->op_code, 0x0001 );   // ARP Request
+	int i = 0;
+	for( i = 0; i < arphdr->hlen; ++i ){
+		arphdr->macsrc[i] = src->macaddr[i];
+		arphdr->macdst[i] = 0x00;    // 送信先のMACアドレスはわからん
+	}
+	for( i = 0; i < arphdr->plen; ++i ){
+		arphdr->ipsrc[i] = src->ipaddr[i];
+		arphdr->ipdst[i] = dst->ipaddr[i];
+	}
+
+	pkt->len = sizeof(Ether_Hdr) + sizeof(ARP_Hdr);
+	return pkt;
+}
+
+int IsARPReply( const Packet* pkt )
+{
+	const Ether_Hdr* ethhdr = (const Ether_Hdr*)pkt->data;
+	uint16_t type = Get_BEU16( ethhdr->type );
+	if( type != 0x0806 ){    // ethernet header の type がARPじゃない
+		return 0;
+	}
+
+	const ARP_Hdr* arphdr = (const ARP_Hdr*)ethhdr->data;
+	uint16_t hw_type = Get_BEU16( arphdr->hw_type );
+	uint16_t protocol = Get_BEU16( arphdr->protocol );
+	uint16_t op_code = Get_BEU16( arphdr->op_code );
+
+	if( hw_type == 0x0001 && protocol == 0x0800 && op_code == 2 ){
+		return 1;
+	}
+
+	return 0;
+}
+
+void Process_ARPReply( const Packet* pkt, Host* dst )
+{
+	const ARP_Hdr* arphdr = (const ARP_Hdr*)(pkt->data + sizeof(Ether_Hdr));
+	int i = 0;
+	for( i = 0; i < 6; ++i ){
+		// ARP応答の送信元MAC Addressが知りたい
+		dst->macaddr[i] = arphdr->macsrc[i];
+	}
+}
+
+int IsICMPEchoReply( const Packet* pkt )
+{
+	const Ether_Hdr* ethhdr = (const Ether_Hdr*)pkt->data;
+	uint16_t type = Get_BEU16( ethhdr->type );
+	if( type != 0x0800 ){    // ethernet header の type がIPじゃない
+		return 0;
+	}
+
+	const IP_Hdr* iphdr = (const IP_Hdr*)ethhdr->data;
+	if( iphdr->protocol != 0x01 ){
+		return 0;           // IP header の protocol がICMPじゃない
+	}
+
+	const ICMP_Hdr* icmphdr = (const ICMP_Hdr*)iphdr->data;
+	if( icmphdr->type != 0x00 ){  // ICMPの type が ICMP Echo Reply じゃない
+		return 0;
+	}
+
+	return 1;
 }
 
 void Show_EtherHdr( const Ether_Hdr* hdr )

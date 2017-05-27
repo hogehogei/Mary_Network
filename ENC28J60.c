@@ -185,7 +185,6 @@ Packet* Use_TxPktBuf_ENC28J60(void)
 	}
 
 	sIsTxPktBufInuse = 1;
-
 	// 先頭の1byteは 送信時の MACコントロール用で、ethernet ヘッダには関係ないので
 	// offsetしたアドレスを返す
 	sTxPkt.data = sTxPktBuf;
@@ -208,6 +207,7 @@ Packet* Use_RxPktBuf_ENC28J60(void)
 		return 0;
 	}
 
+	sIsRxPktBufInuse = 1;
 	sRxPkt.data = sRxPktBuf;
 	sRxPkt.len  = 0;
 
@@ -304,16 +304,26 @@ int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in )
 
 int Get_RemainPacketCount(void)
 {
+	// eratta sheet 参照
+	// PKTIF だけでは受信パケットがあるかどうか判断できない時があるらしい。
 	return ReadCR(EPKTCNT);
 }
 
-int RecvPacket_ENC28J60( Packet* packet_in )
+int RecvPacket_ENC28J60( Packet** packet_in )
 {
 	if( Get_RemainPacketCount() == 0 ){
 		return RECV_NOPKT;
 	}
 
-	return CopyPacketFromRecvBuffer_ENC28J60( packet_in );
+	if( sIsRxPktBufInuse ){
+		// パケットバッファが枯渇してるのでドロップさせる
+		*packet_in = 0;
+	}
+	else {
+		*packet_in = Use_RxPktBuf_ENC28J60();
+	}
+
+	return CopyPacketFromRecvBuffer_ENC28J60( *packet_in );
 }
 
 int InterruptCallback_ENC28J60( Packet** packet_in )
@@ -321,17 +331,6 @@ int InterruptCallback_ENC28J60( Packet** packet_in )
 	int status = 0;
 	uint8_t eir = ReadCR(EIR);
 
-	if( eir & PKTIF ){
-		if( sIsRxPktBufInuse ){
-			// パケットバッファが枯渇してるのでドロップさせる
-			*packet_in = 0;
-		}
-		else {
-			*packet_in = Use_RxPktBuf_ENC28J60();
-		}
-		status |= RecvPacket_ENC28J60( *packet_in );
-		// PKTIF は手動ではクリアしない、残パケットなしになったら自動でクリアされる
-	}
 	if( eir & LINKIF ){
 		status |= INT_LINKCHANGE;
 		ReadCR( PHIR );
@@ -359,7 +358,8 @@ int InterruptCallback_ENC28J60( Packet** packet_in )
 
 void EnableInterrupt_ENC28J60(void)
 {
-	BitFieldSet( EIE, (INT_ENABLE | PKTIF | TXERIF | RXERIF) );
+	//BitFieldSet( EIE, (INT_ENABLE | PKTIF | TXERIF | RXERIF) );
+	BitFieldSet( EIE, (INT_ENABLE | TXERIF | RXERIF) );
 }
 
 void DisableInterrupt_ENC28J60(void)

@@ -97,6 +97,3 @@ int SPI0_Read( uint16_t* dst, uint32_t dstlen )
 
 	return i;
 }
-
-
-

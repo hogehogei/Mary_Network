@@ -183,6 +183,10 @@
 #define    MACADDR5    (0xFF)
 #define    MACADDR6    (0x10)
 
+typedef struct _Packet {
+	uint8_t* data;
+	uint32_t len;
+} Packet;
 
 //
 // Ethernet Controller ENC28J60 初期化
@@ -207,9 +211,10 @@ void Free_RxPktBuf_ENC28J60( Packet* packet );
 void SendPacket_ENC28J60( const Packet* packet_out );
 
 // Packet を受信する
+int RecvPacket_ENC28J60( Packet** packet_in );
 int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in );
 int Get_RemainPacketCount(void);
-int RecvPacket_ENC28J60( Packet* packet_in );
+
 
 
 enum InterruptFlag {
