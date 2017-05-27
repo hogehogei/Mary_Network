@@ -119,15 +119,6 @@ void RecvPacket(void)
 	if( status & INT_TXERROR ){
 		UART_Print( "TxError, reset tx buffer" );
 	}
-	if( status & RECV_DROPPKT ){
-		UART_Print( "RecvBuffer full. Drop packet" );
-	}
-	if( status & RECV_NOPKT ){
-		UART_Print( "No packet" );
-	}
-	if( status & RECV_CRCERR ){
-		UART_Print( "Received packet CRC is Uncorrect. drop." );
-	}
 
 	GPIO0IC |= _BV(3);
 	EnableInterrupt_ENC28J60();
