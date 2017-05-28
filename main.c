@@ -30,6 +30,7 @@ static const uint32_t skLEDColorTbl[] = {
 
 Packet* gRxPkt = 0;
 int gARPRequestCompleted = 0;
+int gIsRecvPkt = 0;
 int gSendPktWaitCount = 0;
 int gLEDCount = 0;
 
@@ -108,10 +109,13 @@ void SendPacketTimer(void)
 void RecvPacket(void)
 {
 	DisableInterrupt_ENC28J60();
-	int status = InterruptCallback_ENC28J60( &gRxPkt );
+	int status = InterruptCallback_ENC28J60();
 
 	if( status & INT_LINKCHANGE ){
 		UART_Print( "PHY link status change" );
+	}
+	if( status & INT_RECVPKT ){
+		gIsRecvPkt = 1;
 	}
 	if( status & INT_RXERROR ){
 		UART_Print( "RxError, reset rx buffer" );
@@ -121,6 +125,8 @@ void RecvPacket(void)
 	}
 
 	GPIO0IC |= _BV(3);
+	// ここではパケット受信割り込みは有効にしない
+	// パケットをすべて受信してから有効にする
 	EnableInterrupt_ENC28J60();
 }
 
@@ -189,12 +195,12 @@ int ResetISR (void)
 
 	// main loop
 	while(1){
-		if( !Is_LinkUP_ENC28J60() ){
-			continue;
+		while( gSendPktWaitCount <= 1000 && !gIsRecvPkt ){
+			asm( "wfi" );
 		}
 
 		// 受信パケットがある？
-		if(  Get_RemainPacketCount() > 0 ){
+		while( Get_RemainPacketCount() > 0 ){
 			if( RecvPacket_ENC28J60( &gRxPkt ) == RECV_VALIDPKT &&
 				CheckPacketAddressDestination( gRxPkt, &gHostSrc ) ){
 				if( IsARPReply( gRxPkt ) ){
@@ -209,6 +215,11 @@ int ResetISR (void)
 
 			Free_RxPktBuf_ENC28J60( gRxPkt );
 			gRxPkt = 0;
+		}
+		if( Get_RemainPacketCount() == 0 ){
+			// パケットを受信しつくしたので割り込み有効に
+			EnableRecvPktInterrupt_ENC28J60();
+			gIsRecvPkt = 0;
 		}
 
 		if( gSendPktWaitCount > 1000 ){

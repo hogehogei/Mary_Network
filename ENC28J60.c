@@ -31,18 +31,22 @@ static uint8_t sMACAddr[6] = {
 // Utility Functions
 static void BitFieldSet( uint8_t reg, uint8_t val )
 {
+	__disable_irq();
 	CS_Low();
 	SPI0_TxRx( _BFS(reg) );
 	SPI0_TxRx( val );
 	CS_High();
+	__enable_irq();
 }
 
 static void BitFieldClear( uint8_t reg, uint8_t val )
 {
+	__disable_irq();
 	CS_Low();
 	SPI0_TxRx( _BFC(reg) );
 	SPI0_TxRx( val );
 	CS_High();
+	__enable_irq();
 }
 
 static void SwitchBank( uint8_t bank )
@@ -58,14 +62,21 @@ static uint8_t ReadCR( uint8_t reg )
 		SwitchBank( GETBANK(reg) );
 	}
 
+
 	CS_Low();
 	uint16_t data;
+
+	__disable_irq();
 	SPI0_TxRx( _RCR(reg) );
 	data = SPI0_TxRx(0x00);
+	__enable_irq();
 
 	if( IS_MAC_MII_REG(reg) ){
 		// MAC/MII register の場合は 1バイト目はダミーで2バイト目が有効なデータ
+		__disable_irq();
 		data = SPI0_TxRx(0x00);
+		__enable_irq();
+
 		int i = 0;
 		for( i = 0; i < MAC_MII_REGISTER_ACCESS_WAIT; ++i ){
 			CS_Low();
@@ -83,8 +94,10 @@ void WriteCR( uint8_t reg, uint8_t data )
 	}
 
 	CS_Low();
+	__disable_irq();
 	SPI0_TxRx( _WCR(reg) );
 	SPI0_TxRx( data );
+	__enable_irq();
 
 	if( IS_MAC_MII_REG(reg) ){
 		int i = 0;
@@ -117,6 +130,7 @@ static void WritePHYReg( uint8_t phy_addr, uint8_t reg_high, uint8_t reg_low )
 
 static void ReadBufferMem( uint8_t* dst, uint8_t len )
 {
+	__disable_irq();
 	CS_Low();
 	// Read buffer memory command
 	SPI0_TxRx( _RBM() );
@@ -125,10 +139,12 @@ static void ReadBufferMem( uint8_t* dst, uint8_t len )
 		dst[i] = SPI0_TxRx(0x00);
 	}
 	CS_High();
+	__enable_irq();
 }
 
 static void WriteBufferMem( const uint8_t* data, uint16_t len )
 {
+	__disable_irq();
 	CS_Low();
 	// Write buffer memory command
 	SPI0_TxRx( _WBM() );
@@ -137,6 +153,7 @@ static void WriteBufferMem( const uint8_t* data, uint16_t len )
 		SPI0_TxRx( data[i] );
 	}
 	CS_High();
+	__enable_irq();
 }
 
 
@@ -326,7 +343,7 @@ int RecvPacket_ENC28J60( Packet** packet_in )
 	return CopyPacketFromRecvBuffer_ENC28J60( *packet_in );
 }
 
-int InterruptCallback_ENC28J60( Packet** packet_in )
+int InterruptCallback_ENC28J60(void)
 {
 	int status = 0;
 	uint8_t eir = ReadCR(EIR);
@@ -335,6 +352,9 @@ int InterruptCallback_ENC28J60( Packet** packet_in )
 		status |= INT_LINKCHANGE;
 		ReadCR( PHIR );
 		// LINKIF はPHIRを読むと自動でクリアされる
+	}
+	if( eir & PKTIF ){
+		status |= INT_RECVPKT;
 	}
 	if( eir & TXERIF ){
 		status |= INT_TXERROR;
@@ -358,13 +378,17 @@ int InterruptCallback_ENC28J60( Packet** packet_in )
 
 void EnableInterrupt_ENC28J60(void)
 {
-	//BitFieldSet( EIE, (INT_ENABLE | PKTIF | TXERIF | RXERIF) );
-	BitFieldSet( EIE, (INT_ENABLE | TXERIF | RXERIF) );
+	WriteCR( EIE, (INT_ENABLE | TXERIF | RXERIF) );
+}
+
+void EnableRecvPktInterrupt_ENC28J60(void)
+{
+	WriteCR( EIE, (INT_ENABLE | PKTIF) );
 }
 
 void DisableInterrupt_ENC28J60(void)
 {
-	BitFieldClear( EIE, INT_ENABLE );
+	WriteCR( EIE, INT_ENABLE );
 }
 
 void Reset_ENC28J60(void)
@@ -441,8 +465,8 @@ void Init_MAC_ENC28J60(void)
 void Init_Interrupt_ENC28J60(void)
 {
 	// 割り込み有効
-	//DisableInterrupt_ENC28J60();
 	EnableInterrupt_ENC28J60();
+	EnableRecvPktInterrupt_ENC28J60();
 
 	UART_Print( "Interrupt Setting" );
 }

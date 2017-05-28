@@ -233,15 +233,17 @@ enum ECN28J60_Result {
 	RECV_CRCERR   = (1 << 3),
 	INT_LINKCHANGE = (1 << 4),
 	INT_TXERROR = (1 << 5),
-	INT_RXERROR = (1 << 6)
+	INT_RXERROR = (1 << 6),
+	INT_RECVPKT = (1 << 7)
 };
 
 // interrupt 有効/無効
 void EnableInterrupt_ENC28J60(void);
+void EnableRecvPktInterrupt_ENC28J60(void);
 void DisableInterrupt_ENC28J60(void);
 
 // 割り込み用コールバック
-int InterruptCallback_ENC28J60( Packet** packet_in );
+int InterruptCallback_ENC28J60(void);
 
 // 初期化ルーチン中で使用
 void Reset_ENC28J60(void);
