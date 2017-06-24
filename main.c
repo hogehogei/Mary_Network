@@ -127,7 +127,7 @@ void RecvPacket(void)
 	GPIO0IC |= _BV(3);
 	// ここではパケット受信割り込みは有効にしない
 	// パケットをすべて受信してから有効にする
-	EnableInterrupt_ENC28J60();
+	EnableTxRxErrorInterrupt_ENC28J60();
 }
 
 //

@@ -376,7 +376,7 @@ int InterruptCallback_ENC28J60(void)
 	return status;
 }
 
-void EnableInterrupt_ENC28J60(void)
+void EnableTxRxErrorInterrupt_ENC28J60(void)
 {
 	WriteCR( EIE, (INT_ENABLE | TXERIF | RXERIF) );
 }
@@ -465,7 +465,7 @@ void Init_MAC_ENC28J60(void)
 void Init_Interrupt_ENC28J60(void)
 {
 	// 割り込み有効
-	EnableInterrupt_ENC28J60();
+	EnableTxRxErrorInterrupt_ENC28J60();
 	EnableRecvPktInterrupt_ENC28J60();
 
 	UART_Print( "Interrupt Setting" );
