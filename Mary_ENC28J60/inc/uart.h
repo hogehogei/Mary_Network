@@ -14,7 +14,7 @@ void UART_Print( const char* str );
 void UART_NewLine(void);
 void UART_HexPrint( const uint8_t* hex, int len );
 
-// 割り込みハンドラに登録すること！
-void UART_IRQHandler(void);
+int UART_SendByte(void);
+void UART_MoveRxFIFODataToRxBuf(void);
 
 #endif

@@ -134,7 +134,7 @@ ICMP_Hdr* Create_ICMPHdr( uint8_t* frame_head, const Host* src, const Host* dst,
 	iphdr->protocol    = 0x01;    // ICMP
 	IP_StoreChecksum( iphdr );
 
-	return iphdr->data;
+	return reinterpret_cast<ICMP_Hdr*>(iphdr->data);
 }
 
 Packet* Create_ICMPEchoRequest( const Host* src, const Host* dst )

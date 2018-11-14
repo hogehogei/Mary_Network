@@ -489,7 +489,7 @@ void Show_Setting_ENC28J60(void)
 	UART_Print( "** Max Frame Length" );
 	uint16_t max_frame_len = ReadCR(MAMXFLL);
 	max_frame_len |= ReadCR(MAMXFLH) << 8;
-	UART_HexPrint( &max_frame_len, 2 ); UART_NewLine();
+	UART_HexPrint( reinterpret_cast<const uint8_t*>(&max_frame_len), 2 ); UART_NewLine();
 
 	UART_Print( "** MAC Address" );
 	uint8_t macaddr[6];

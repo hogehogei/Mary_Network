@@ -90,7 +90,7 @@ static int UART_RecvByte(void)
 	return result;
 }
 
-static void UART_MoveRxFIFODataToRxBuf(void)
+void UART_MoveRxFIFODataToRxBuf(void)
 {
 	int result;
 	uint8_t temp;
@@ -105,7 +105,7 @@ static void UART_MoveRxFIFODataToRxBuf(void)
 	}
 }
 
-static int UART_SendByte(void)
+int UART_SendByte(void)
 {
 	if( gUART_TxBufBegin == gUART_TxBufIdx ){
 		return 0;
@@ -217,35 +217,4 @@ void UART_HexPrint( const uint8_t* hex, int len )
 		UART_Send( c, 2 );
 	}
 }
-
-void UART_IRQHandler(void)
-{
-	while(1){
-		uint32_t int_flag = U0IIR;
-		// 割り込みが残ってないなら抜ける
-		if( (int_flag & 0x01) ){
-			break;
-		}
-
-		uint32_t t = 0;
-		switch( int_flag & 0x0E ){
-		case 2:    // THER
-			// 送信バッファに残っているデータをすべて送る
-			while( UART_SendByte() ) ;
-			break;
-		case 4:   // Recieve Data Available
-			UART_MoveRxFIFODataToRxBuf();
-			break;
-		default:  // Rx FIFO Error
-			// エラーをクリア
-			t = U0LSR;
-			// U0RBR の中身を読み捨てる
-			t = U0RBR;
-			break;
-		}
-	}
-}
-
-
-
 

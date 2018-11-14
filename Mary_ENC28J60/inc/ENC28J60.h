@@ -239,6 +239,7 @@ enum ECN28J60_Result {
 
 // interrupt 有効/無効
 void EnableErrorInterrupt_ENC28J60(void);
+void EnableTxRxErrorInterrupt_ENC28J60(void);
 void EnableRecvPktInterrupt_ENC28J60(void);
 void DisableInterrupt_ENC28J60(void);
 

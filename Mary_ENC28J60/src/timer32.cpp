@@ -1,8 +1,7 @@
 
 #include "timer32.h"
 #include "LPC1100.h"
-
-void (*gTimer32B1_Callback)(void) = 0;
+#include "global.hpp"
 
 int Init_Timer32B1( uint32_t irq_micro_sec )
 {
@@ -40,16 +39,3 @@ int Timer32B1_SetCallback( void (*callback_func)(void) )
 
 	return 1;
 }
-
-void CT32B1_IRQHandler(void)
-{
-	if( TMR32B1IR & 0x01 ){
-		if( gTimer32B1_Callback ){
-			(*gTimer32B1_Callback)();
-		}
-		TMR32B1IR = (1 << 0);
-	}
-}
-
-
-

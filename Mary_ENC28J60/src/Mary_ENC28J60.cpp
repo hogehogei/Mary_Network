@@ -1,22 +1,31 @@
+/*
+===============================================================================
+ Name        : main.c
+ Author      : $(author)
+ Version     :
+ Copyright   : $(copyright)
+ Description : main definition
+===============================================================================
+*/
+
+#ifdef __USE_CMSIS
+#include "LPC11xx.h"
+#endif
+
+#include <cr_section_macros.h>
+
+// TODO: insert other include files here
+#include <cstdint>
 #include "LPC1100.h"
 #include "led.h"
 #include "timer32.h"
 #include "uart.h"
-#include "ledarray.h"
 #include "systick.h"
 #include "spi.h"
 #include "ENC28J60.h"
 #include "network.h"
 
-#include <NXP/crp.h>
-// Code Read Protection 設定用
-// この位置のメモリにある値を書き込むとFlashがロックされて
-// 2度と書き換えができなくなるらしい。その防止用
-__CRP const unsigned int CRP_WORD = CRP_NO_CRP ;
-
-/* Section boundaries defined in linker script */
-extern long _data[], _etext[], _edata[], _bss[], _ebss[];//, _endof_sram[];
-extern long _vStackTop[];
+// TODO: insert other definitions and declarations here
 
 static const uint32_t skLEDColorTbl[] = {
 		LED_COLOR_RED,
@@ -106,36 +115,12 @@ void SendPacketTimer(void)
 	++gLEDCount;
 }
 
-void RecvPacket(void)
-{
-	DisableInterrupt_ENC28J60();
-	int status = InterruptCallback_ENC28J60();
 
-	if( status & INT_LINKCHANGE ){
-		UART_Print( "PHY link status change" );
-	}
-	if( status & INT_RECVPKT ){
-		gIsRecvPkt = 1;
-	}
-	if( status & INT_RXERROR ){
-		UART_Print( "RxError, reset rx buffer" );
-	}
-	if( status & INT_TXERROR ){
-		UART_Print( "TxError, reset tx buffer" );
-	}
 
-	GPIO0IC |= _BV(3);
-	// ここではパケット受信割り込みは有効にしない
-	// パケットをすべて受信してから有効にする
-	EnableTxRxErrorInterrupt_ENC28J60();
-}
+int main(void) {
 
-//
-// エントリポイント
-//
-int ResetISR (void)
-{
-	long *d = 0, *s = 0;
+    // TODO: insert code here
+
 	/* Configure BOD control (Reset on Vcc dips below 2.7V) */
 	BODCTRL = 0x13;
 
@@ -153,10 +138,6 @@ int ResetISR (void)
 	SYSAHBCLKDIV = 1;						/* Set system clock divisor (1) */
 	MAINCLKSEL = 3;							/* Select PLL-out as main clock */
 	MAINCLKUEN = 0; MAINCLKUEN = 1;
-
-	/* Initialize .data/.bss section and static objects get ready to use after this process */
-	for (s = _etext, d = _data; d < _edata; *d++ = *s++) ;
-	for (d = _bss; d < _ebss; *d++ = 0) ;
 
 	SYSAHBCLKCTRL |= 0x1005F;
 
@@ -246,86 +227,31 @@ int ResetISR (void)
 			gLEDCount = 0;
 		}
 	}
+
+    return 0 ;
 }
 
-/*--------------------------------------------------------------------/
-/ Exception Vector Table                                              /
-/--------------------------------------------------------------------*/
-
-void trap (void)
+__attribute__ ((section(".after_vectors")))
+void RecvPacket(void)
 {
-	static uint32_t cnt = 0;
-	TurnOffLED( LED_COLOR_RED | LED_COLOR_GREEN | LED_COLOR_BLUE );
+	DisableInterrupt_ENC28J60();
+	int status = InterruptCallback_ENC28J60();
 
-	while(1){
-		++cnt;
-		if( (cnt >> 16) & 0x01 ){
-			TurnOnLED( LED_COLOR_WHITE );
-		}
-		else {
-			TurnOffLED( LED_COLOR_WHITE );
-		}
+	if( status & INT_LINKCHANGE ){
+		UART_Print( "PHY link status change" );
+	}
+	if( status & INT_RECVPKT ){
+		gIsRecvPkt = 1;
+	}
+	if( status & INT_RXERROR ){
+		UART_Print( "RxError, reset rx buffer" );
+	}
+	if( status & INT_TXERROR ){
+		UART_Print( "TxError, reset tx buffer" );
 	}
 
-	/* Trap spurious interrupt */
+	GPIO0IC |= _BV(3);
+	// ここではパケット受信割り込みは有効にしない
+	// パケットをすべて受信してから有効にする
+	EnableTxRxErrorInterrupt_ENC28J60();
 }
-
-void HardFault_Handler(void)
-{
-	static uint32_t cnt = 0;
-	TurnOffLED( LED_COLOR_RED | LED_COLOR_GREEN | LED_COLOR_BLUE );
-
-	while(1){
-		++cnt;
-		if( (cnt >> 16) & 0x01 ){
-			TurnOnLED( LED_COLOR_RED );
-		}
-		else {
-			TurnOffLED( LED_COLOR_RED );
-		}
-	}
-}
-
-void* const vector[] __attribute__ ((section(".isr_vector"))) =	/* Vector table to be allocated to address 0 */
-{
-	&_vStackTop,//_endof_sram,	/* Reset value of MSP */
-	ResetISR,			/* Reset entry */
-	trap,//NMI_Handler,
-	HardFault_Handler,//HardFault_Hander,
-	0, 0, 0, 0, 0, 0, 0,//<Reserved>
-	trap,//SVC_Handler,
-	0, 0,//<Reserved>
-	trap,//PendSV_Handler,
-	SysTick_Handler,//SysTick_Handler,
-	trap,//PIO0_0_IRQHandler,
-	trap,//PIO0_1_IRQHandler,
-	trap,//PIO0_2_IRQHandler,
-	trap,//PIO0_3_IRQHandler,
-	trap,//PIO0_4_IRQHandler,
-	trap,//PIO0_5_IRQHandler,
-	trap,//PIO0_6_IRQHandler,
-	trap,//PIO0_7_IRQHandler,
-	trap,//PIO0_8_IRQHandler,
-	trap,//PIO0_9_IRQHandler,
-	trap,//PIO0_10_IRQHandler,
-	trap,//PIO0_11_IRQHandler,
-	trap,//PIO1_0_IRQHandler,
-	trap,//C_CAN_IRQHandler,
-	trap,//SPI1_IRQHandler,
-	trap,//I2C_IRQHandler,
-	trap,//CT16B0_IRQHandler,
-	trap,//CT16B1_IRQHandler,
-	trap,//CT32B0_IRQHandler,
-	CT32B1_IRQHandler,//CT32B1_IRQHandler,
-	trap,//SPI0_IRQHandler,
-	UART_IRQHandler,  //UART_IRQHandler,
-	0, 0,//<Reserved>
-	trap,//ADC_IRQHandler,
-	trap,//WDT_IRQHandler,
-	trap,//BOD_IRQHandler,
-	0,//<Reserved>
-	trap,//PIO_3_IRQHandler,
-	trap,//PIO_2_IRQHandler,
-	trap,//PIO_1_IRQHandler,
-	RecvPacket //PIO_0_IRQHandler
-};
