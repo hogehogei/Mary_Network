@@ -44,7 +44,7 @@ all: Mary_ENC28J60.axf
 Mary_ENC28J60.axf: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: MCU C++ Linker'
-	arm-none-eabi-c++ -nostdlib -Xlinker -Map="Mary_ENC28J60.map" -Xlinker --gc-sections -Xlinker -print-memory-usage -mcpu=cortex-m0 -mthumb -T "Mary_ENC28J60_Debug.ld" -o "Mary_ENC28J60.axf" $(OBJS) $(USER_OBJS) $(LIBS)
+	arm-none-eabi-c++ -nostdlib -Xlinker -Map="Mary_ENC28J60.map" -Xlinker --gc-sections -Xlinker -print-memory-usage -mcpu=cortex-m0 -mthumb -T "Mary_ENC28J60_Release.ld" -o "Mary_ENC28J60.axf" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 	$(MAKE) --no-print-directory post-build
@@ -56,7 +56,7 @@ clean:
 
 post-build:
 	-@echo 'Performing post-build steps'
-	-arm-none-eabi-size "Mary_ENC28J60.axf" ; arm-none-eabi-objcopy -v -O ihex "Mary_ENC28J60.axf" "Mary_ENC28J60.hex"
+	-arm-none-eabi-size "Mary_ENC28J60.axf" ; arm-none-eabi-objcopy -v -O ihex "Mary_ENC28J60.axf" "Mary_ENC28J60.hex" ;
 	-@echo ' '
 
 .PHONY: all clean dependents

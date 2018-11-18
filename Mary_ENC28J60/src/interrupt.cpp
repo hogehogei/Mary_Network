@@ -50,3 +50,12 @@ void UART_IRQHandler(void)
 		}
 	}
 }
+
+__attribute__ ((section(".after_vectors")))
+void SysTick_Handler(void)
+{
+	if( gSystick_WaitCalled ){
+		++gSystick_WaitCnt;
+	}
+}
+

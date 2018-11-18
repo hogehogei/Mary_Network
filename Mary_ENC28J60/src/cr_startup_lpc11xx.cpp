@@ -76,7 +76,7 @@ WEAK void NMI_Handler(void);
 WEAK void HardFault_Handler(void);
 WEAK void SVC_Handler(void);
 WEAK void PendSV_Handler(void);
-WEAK void SysTick_Handler(void);
+//WEAK void SysTick_Handler(void);
 WEAK void IntDefaultHandler(void);
 
 //*****************************************************************************
@@ -335,6 +335,7 @@ void PendSV_Handler(void)
     {
     }
 }
+/*
 __attribute__ ((section(".after_vectors")))
 void SysTick_Handler(void)
 {
@@ -342,6 +343,7 @@ void SysTick_Handler(void)
     {
     }
 }
+*/
 
 //*****************************************************************************
 //

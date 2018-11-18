@@ -1,1 +1,5 @@
 .metadata/
+Mary_ENC28J60/Debug/*.map
+Mary_ENC28J60/Debug/*.hex
+Mary_ENC28J60/Release/*.map
+Mary_ENC28J60/Release/*.hex
