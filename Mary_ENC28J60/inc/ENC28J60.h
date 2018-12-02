@@ -1,7 +1,11 @@
 #ifndef    ENC28J60_H_INCLUDED
 #define    ENC28J60_H_INCLUDED
 
+#include <drv/i_ethif.hpp>
 #include "stdint.h"
+#include "lib/net/eth_settings.hpp"
+#include "drv/gpio.hpp"
+#include "drv/spi.h"
 
 //
 //  SPI Instruction Set
@@ -183,77 +187,81 @@
 #define    MACADDR5    (0xFF)
 #define    MACADDR6    (0x10)
 
-typedef struct _Packet {
-	uint8_t* data;
-	uint32_t len;
-} Packet;
 
-//
-// Ethernet Controller ENC28J60 初期化
-//
-void Init_ENC28J60(void);
+class ENC28J60 : public I_EthIf
+{
+public:
 
-// linkup してるかどうか
-// 1: linkup   0: linkdown
-int Is_LinkUP_ENC28J60(void);
+	enum InterruptFlag {
+		INT_ENABLE = (1 << 7),
+		PKTIF  = (1 << 6),
+		//DMAIF  = (1 << 5),    // 使わない
+		LINKIF = (1 << 4),
+		//TXIF   = (1 << 3),    // 使わない
+		TXERIF = (1 << 1),
+		RXERIF = (1 << 0)
+	};
+	enum Result {
+		RECV_NOPKT = (1 << 0),
+		RECV_VALIDPKT = (1 << 1),
+		RECV_DROPPKT  = (1 << 2),
+		RECV_CRCERR   = (1 << 3),
+		INT_LINKCHANGE = (1 << 4),
+		INT_TXERROR = (1 << 5),
+		INT_RXERROR = (1 << 6),
+		INT_RECVPKT = (1 << 7)
+	};
 
-// MAC Address を取得する
-const uint8_t* Get_MACAddr_ENC28J60(void);
+public:
 
-typedef struct _Packet Packet;
-// 送信/受信用バッファ取得
-Packet* Use_TxPktBuf_ENC28J60(void);
-void Free_TxPktBuf_ENC28J60( Packet* packet );
-Packet* Use_RxPktBuf_ENC28J60(void);
-void Free_RxPktBuf_ENC28J60( Packet* packet );
+	ENC28J60();
+	virtual ~ENC28J60();
 
-// Packet を送る
-void SendPacket_ENC28J60( const Packet* packet_out );
+	bool Initialize( const Eth_Settings& settings, uint8_t spi_ch, const GPIO& cs );
+	virtual bool Send( const PacketPtr& frame ) override;
+	virtual bool Recv( PacketPtr* frame ) override;
 
-// Packet を受信する
-int RecvPacket_ENC28J60( Packet** packet_in );
-int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in );
-int Get_RemainPacketCount(void);
+	virtual uint32_t get_RxRemainPacketCount() override;
+	virtual bool isLinkUp() override;
+	virtual const uint8_t* getMacAddr() const override;
 
+	int Interrupt_Callback();
 
+private:
 
-enum InterruptFlag {
-	INT_ENABLE = (1 << 7),
-	PKTIF  = (1 << 6),
-	//DMAIF  = (1 << 5),    // 使わない
-	LINKIF = (1 << 4),
-	//TXIF   = (1 << 3),    // 使わない
-	TXERIF = (1 << 1),
-	RXERIF = (1 << 0)
+	void BitFieldSet( uint8_t reg, uint8_t val );
+	void BitFieldClear( uint8_t reg, uint8_t val );
+	void SwitchBank( uint8_t reg );
+	uint8_t ReadCR( uint8_t reg );
+	void WriteCR( uint8_t reg, uint8_t data );
+	void ReadPHYReg( uint8_t phy_addr, uint8_t* reg_high, uint8_t* reg_low );
+	void WritePHYReg( uint8_t phy_addr, uint8_t reg_high, uint8_t reg_low );
+	void ReadBufferMem( uint8_t* dst, uint8_t len );
+	void WriteBufferMem( const uint8_t* data, uint16_t len );
+
+	uint8_t Get_RemainPacketCount();
+
+	// 初期化ルーチン中で使用
+	void Reset();
+	void Init_PHY();
+	void Init_PktBuffer();
+	void Init_PktFilter();
+	void Init_MAC();
+	void Init_Interrupt();
+	void Init_EthControl();
+	void Show_Setting();
+
+	void EnableTxRxErrorInterrupt();
+	void EnableRecvPktInterrupt();
+	void DisableInterrupt();
+
+	Eth_Settings		 m_Settings;		//! 初期化設定値
+	SPI 				 m_SPI;				//! 使用するSPIチャンネル
+	GPIO				 m_CS;				//! ChipSelect
+
+	uint32_t			 m_CurrentBank;		//! 現在バンク
+	uint16_t			 m_Rx_NextPktPtr;	//! 次受信パケット先頭ポインタ
+											//! ENC28J60 からデータを受信するとき、次のパケットの先頭アドレスを覚えておくため
 };
-enum ECN28J60_Result {
-	RECV_NOPKT = (1 << 0),
-	RECV_VALIDPKT = (1 << 1),
-	RECV_DROPPKT  = (1 << 2),
-	RECV_CRCERR   = (1 << 3),
-	INT_LINKCHANGE = (1 << 4),
-	INT_TXERROR = (1 << 5),
-	INT_RXERROR = (1 << 6),
-	INT_RECVPKT = (1 << 7)
-};
-
-// interrupt 有効/無効
-void EnableErrorInterrupt_ENC28J60(void);
-void EnableTxRxErrorInterrupt_ENC28J60(void);
-void EnableRecvPktInterrupt_ENC28J60(void);
-void DisableInterrupt_ENC28J60(void);
-
-// 割り込み用コールバック
-int InterruptCallback_ENC28J60(void);
-
-// 初期化ルーチン中で使用
-void Reset_ENC28J60(void);
-void Init_PHY_ENC28J60(void);
-void Init_PktBuffer_ENC28J60(void);
-void Init_PktFilter_ENC28J60(void);
-void Init_MAC_ENC28J60(void);
-void Init_Interrupt_ENC28J60(void);
-void Init_EthControl_ENC28J60(void);
-void Show_Setting_ENC28J60(void);
 
 #endif

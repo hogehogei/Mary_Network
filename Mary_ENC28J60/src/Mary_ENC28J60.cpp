@@ -21,7 +21,8 @@
 #include "timer32.h"
 #include "uart.h"
 #include "systick.h"
-#include "spi.h"
+#include "drv/spi.h"
+#include <drv/ethif_drv.hpp>
 #include "ENC28J60.h"
 #include "network.h"
 
@@ -155,34 +156,39 @@ int main(void) {
 	Timer32B1_SetCallback( SendPacketTimer );
 	UART_Print( "Init_Timer32B1()" );
 	// SPI0の初期化
-	Init_SPI0( 8 );    // 8bit length
+	SPI_Drv::Settings spi_ch0_settings = {
+			0,
+			8,
+			SPI_Drv::ROLE_MASTER,
+			SPI_Drv::MODE0
+	};
+	SPI_Drv::Initialize( spi_ch0_settings );
 	UART_Print( "Init_SPI()" );
 
-	// Mary側の割り込み PIO0_3 を割り込み判定に使用
-	// High->Low falling edge 時に検出
-	GPIO0IS  &= ~_BV(3);
-	GPIO0IBE &= ~_BV(3);
-	GPIO0IEV &= ~_BV(3);
-	GPIO0IE  |= _BV(3);
-	__enable_irqn( PIO_0_IRQn );
-
 	// ENC28J60 Eth Controller の初期化
-	Init_ENC28J60();
-	UART_Print( "Init_ENC28J60()" );
+	Eth_Settings eth0_settings = {
+			0,
+			{ 0x52, 0x54, 0x00, 0x12, 0xFF, 0x10 }
+	};
+	EthIf_Drv::Initialize( eth0_settings );
 	Init_HostInfo();
 
 	int led_idx = 0;
 	TurnOnLED( skLEDColorTbl[led_idx] );
 
+	Eth_If eth0 = EthIf_Drv::Instance( 0 );
 	// main loop
 	while(1){
-		while( gSendPktWaitCount <= 1000 && !gIsRecvPkt ){
+		while( gSendPktWaitCount <= 1000 ){
+
 			asm( "wfi" );
 		}
 
 		// 受信パケットがある？
-		while( Get_RemainPacketCount() > 0 ){
-			if( RecvPacket_ENC28J60( &gRxPkt ) == RECV_VALIDPKT &&
+		while( eth0.get_RxRemainPacketCount() > 0 ){
+			EthFramePtr eth_frame;
+
+			if( eth0.Recv( &eth_frame ) &&
 				CheckPacketAddressDestination( gRxPkt, &gHostSrc ) ){
 				if( IsARPReply( gRxPkt ) ){
 					UART_Print( "Receive ARP reply" );
@@ -196,11 +202,6 @@ int main(void) {
 
 			Free_RxPktBuf_ENC28J60( gRxPkt );
 			gRxPkt = 0;
-		}
-		if( Get_RemainPacketCount() == 0 ){
-			// パケットを受信しつくしたので割り込み有効に
-			EnableRecvPktInterrupt_ENC28J60();
-			gIsRecvPkt = 0;
 		}
 
 		if( gSendPktWaitCount > 1000 ){
@@ -231,27 +232,3 @@ int main(void) {
     return 0 ;
 }
 
-__attribute__ ((section(".after_vectors")))
-void RecvPacket(void)
-{
-	DisableInterrupt_ENC28J60();
-	int status = InterruptCallback_ENC28J60();
-
-	if( status & INT_LINKCHANGE ){
-		UART_Print( "PHY link status change" );
-	}
-	if( status & INT_RECVPKT ){
-		gIsRecvPkt = 1;
-	}
-	if( status & INT_RXERROR ){
-		UART_Print( "RxError, reset rx buffer" );
-	}
-	if( status & INT_TXERROR ){
-		UART_Print( "TxError, reset tx buffer" );
-	}
-
-	GPIO0IC |= _BV(3);
-	// ここではパケット受信割り込みは有効にしない
-	// パケットをすべて受信してから有効にする
-	EnableTxRxErrorInterrupt_ENC28J60();
-}

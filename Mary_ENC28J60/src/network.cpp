@@ -193,26 +193,6 @@ Packet* Create_ARPRequest( const Host* src, const Host* dst )
 	return pkt;
 }
 
-int IsARPReply( const Packet* pkt )
-{
-	const Ether_Hdr* ethhdr = (const Ether_Hdr*)pkt->data;
-	uint16_t type = Get_BEU16( ethhdr->type );
-	if( type != 0x0806 ){    // ethernet header の type がARPじゃない
-		return 0;
-	}
-
-	const ARP_Hdr* arphdr = (const ARP_Hdr*)ethhdr->data;
-	uint16_t hw_type = Get_BEU16( arphdr->hw_type );
-	uint16_t protocol = Get_BEU16( arphdr->protocol );
-	uint16_t op_code = Get_BEU16( arphdr->op_code );
-
-	if( hw_type == 0x0001 && protocol == 0x0800 && op_code == 2 ){
-		return 1;
-	}
-
-	return 0;
-}
-
 void Process_ARPReply( const Packet* pkt, Host* dst )
 {
 	const ARP_Hdr* arphdr = (const ARP_Hdr*)(pkt->data + sizeof(Ether_Hdr));

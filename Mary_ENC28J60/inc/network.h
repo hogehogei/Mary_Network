@@ -3,19 +3,6 @@
 
 #include "stdint.h"
 
-// network パケットの構造体
-// なぜ 16/32bit の値を使わないかというと
-// CortexM0 はUnalign Memory Access が一切できない
-// つまり 16bit なら 16bit境界, 32bit なら32bit境界にデータを置く必要があるけど
-// ネットワークのヘッダを順番に並べるとどうしてもそうならない
-// なのでバイト境界を問わない8bit値ですべてアクセスするようにするしかない・・・・・・
-// 他の用途ならパディングしておけばOKなはず
-typedef struct _Ether_Hdr {
-	uint8_t macdst[6];
-	uint8_t macsrc[6];
-	uint8_t type[2];
-	uint8_t data[0];
-} Ether_Hdr;
 
 typedef struct _ARP_Hdr {
 	uint8_t hw_type[2];

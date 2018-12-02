@@ -5,6 +5,7 @@
  *      Author: hogehogei
  */
 
+#include <drv/ethernet.hpp>
 #include <stdint.h>
 #include "LPC1100.h"
 #include "interrupt.h"
@@ -58,4 +59,11 @@ void SysTick_Handler(void)
 		++gSystick_WaitCnt;
 	}
 }
+
+__attribute__ ((section(".after_vectors")))
+void RecvPacket(void)
+{
+	EthIf_Drv::ENC28J60_ch1_Callback();
+}
+
 

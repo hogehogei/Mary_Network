@@ -15,6 +15,7 @@ extern "C" {
 void UART_IRQHandler(void);
 void CT32B1_IRQHandler(void);
 void SysTick_Handler(void);
+void RecvPacket(void);
 
 #if defined (__cplusplus)
 } // extern "C"

@@ -12,7 +12,6 @@ CPP_SRCS += \
 ../src/interrupt.cpp \
 ../src/led.cpp \
 ../src/network.cpp \
-../src/spi.cpp \
 ../src/systick.cpp \
 ../src/timer32.cpp \
 ../src/uart.cpp 
@@ -30,7 +29,6 @@ OBJS += \
 ./src/interrupt.o \
 ./src/led.o \
 ./src/network.o \
-./src/spi.o \
 ./src/systick.o \
 ./src/timer32.o \
 ./src/uart.o 
@@ -44,7 +42,6 @@ CPP_DEPS += \
 ./src/interrupt.d \
 ./src/led.d \
 ./src/network.d \
-./src/spi.d \
 ./src/systick.d \
 ./src/timer32.d \
 ./src/uart.d 

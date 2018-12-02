@@ -452,7 +452,8 @@
 #define	PCCAN		0x20000
 #define	PCSSP1		0x40000
 
-
+// SYSAHBCLKCTRL Bit
+#define SYSAHBCLK_SPI	(11)
 
 /*--------------------------------------------------------------*/
 /* Misc Macros                                                  */

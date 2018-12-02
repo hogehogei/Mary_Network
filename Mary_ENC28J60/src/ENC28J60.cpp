@@ -1,22 +1,11 @@
+#include "LPC1100.h"
+#include "drv/spi.h"
+#include "drv/gpio.hpp"
 #include "ENC28J60.h"
-#include "spi.h"
 #include "systick.h"
 #include "uart.h"
 #include "network.h"
 
-// 現在のbank bank switch するか判定用
-static int sCurrentBank = 0;
-
-// 送信用バッファ
-static uint8_t sTxPktBuf[1500] = {0};
-static Packet  sTxPkt;
-static int     sIsTxPktBufInuse = 0;
-// 受信用バッファ
-static uint8_t sRxPktBuf[1500] = {0};
-static Packet  sRxPkt;
-static int     sIsRxPktBufInuse = 0;
-
-static uint16_t sNextPacketPtr = RX_BUFFER_START;
 
 // MAC Address
 static uint8_t sMACAddr[6] = {
@@ -28,87 +17,131 @@ static uint8_t sMACAddr[6] = {
 		MACADDR6
 };
 
+
+ENC28J60::ENC28J60()
+{}
+
+ENC28J60::~ENC28J60()
+{}
+
+bool ENC28J60::Initialize( const Eth_Settings& settings, uint8_t spi_ch, const GPIO& cs )
+{
+	m_Settings	= settings;
+	m_SPI		= SPI_Drv::Instance( spi_ch );
+	m_CS		= cs;
+	m_CurrentBank = 0;
+
+	// Mary側の割り込み PIO0_3 を割り込み判定に使用
+	// High->Low falling edge 時に検出
+	GPIO0IS  &= ~_BV(3);
+	GPIO0IBE &= ~_BV(3);
+	GPIO0IEV &= ~_BV(3);
+	GPIO0IE  |= _BV(3);
+	__enable_irqn( PIO_0_IRQn );
+
+	// システムリセット
+	Reset();
+	// PHYの初期化
+	Init_PHY();
+	// Pkt Buffer　の初期化
+	Init_PktBuffer();
+	// Pkt Filter の初期化
+	Init_PktFilter();
+	// MACの初期化
+	Init_MAC();
+	// 割り込み設定
+	Init_Interrupt();
+	// Ethernet Control 初期化
+	Init_EthControl();
+
+	// デバッグ用
+	Show_Setting();
+
+	// チップセレクトをHiに固定
+	m_CS.Hi();
+
+	return true;
+}
+
 // Utility Functions
-static void BitFieldSet( uint8_t reg, uint8_t val )
+void ENC28J60::BitFieldSet( uint8_t reg, uint8_t val )
 {
 	__disable_irq();
-	CS_Low();
-	SPI0_TxRx( _BFS(reg) );
-	SPI0_TxRx( val );
-	CS_High();
+	m_CS.Lo();
+	m_SPI.TxRx( _BFS(reg) );
+	m_SPI.TxRx( val );
+	m_CS.Hi();
 	__enable_irq();
 }
 
-static void BitFieldClear( uint8_t reg, uint8_t val )
+void ENC28J60::BitFieldClear( uint8_t reg, uint8_t val )
 {
 	__disable_irq();
-	CS_Low();
-	SPI0_TxRx( _BFC(reg) );
-	SPI0_TxRx( val );
-	CS_High();
+	m_CS.Lo();
+	m_SPI.TxRx( _BFC(reg) );
+	m_SPI.TxRx( val );
+	m_CS.Hi();
 	__enable_irq();
 }
 
-static void SwitchBank( uint8_t bank )
+void ENC28J60::SwitchBank( uint8_t reg )
 {
-	BitFieldClear( ECON1, 0x03 );
-	BitFieldSet( ECON1, bank );
-	sCurrentBank = bank;
-}
-
-static uint8_t ReadCR( uint8_t reg )
-{
-	if( GETBANK(reg) != sCurrentBank ){
-		SwitchBank( GETBANK(reg) );
+	uint8_t bank = GETBANK( reg );
+	if( bank != m_CurrentBank ){
+		BitFieldClear( ECON1, 0x03 );
+		BitFieldSet( ECON1, bank );
+		m_CurrentBank = bank;
 	}
+}
 
+uint8_t ENC28J60::ReadCR( uint8_t reg )
+{
+	SwitchBank( reg );
 
-	CS_Low();
+	m_CS.Lo();
 	uint16_t data;
 
 	__disable_irq();
-	SPI0_TxRx( _RCR(reg) );
-	data = SPI0_TxRx(0x00);
+	m_SPI.TxRx( _RCR(reg) );
+	data = m_SPI.TxRx(0x00);
 	__enable_irq();
 
 	if( IS_MAC_MII_REG(reg) ){
 		// MAC/MII register の場合は 1バイト目はダミーで2バイト目が有効なデータ
 		__disable_irq();
-		data = SPI0_TxRx(0x00);
+		data = m_SPI.TxRx(0x00);
 		__enable_irq();
 
-		int i = 0;
+		volatile int i = 0;
 		for( i = 0; i < MAC_MII_REGISTER_ACCESS_WAIT; ++i ){
-			CS_Low();
+			m_CS.Lo();
 		}
 	}
-	CS_High();
+	m_CS.Hi();
 
 	return data;
 }
 
-void WriteCR( uint8_t reg, uint8_t data )
+void ENC28J60::WriteCR( uint8_t reg, uint8_t data )
 {
-	if( GETBANK(reg) != sCurrentBank ){
-		SwitchBank( GETBANK(reg) );
-	}
+	SwitchBank( reg );
 
-	CS_Low();
+	m_CS.Lo();
 	__disable_irq();
-	SPI0_TxRx( _WCR(reg) );
-	SPI0_TxRx( data );
+	m_SPI.TxRx( _WCR(reg) );
+	m_SPI.TxRx( data );
 	__enable_irq();
 
 	if( IS_MAC_MII_REG(reg) ){
-		int i = 0;
+		volatile int i = 0;
 		for( i = 0; i < MAC_MII_REGISTER_ACCESS_WAIT; ++i ){
-			CS_Low();
+			m_CS.Lo();
 		}
 	}
-	CS_High();
+	m_CS.Hi();
 }
 
-static void ReadPHYReg( uint8_t phy_addr, uint8_t* reg_high, uint8_t* reg_low )
+void ENC28J60::ReadPHYReg( uint8_t phy_addr, uint8_t* reg_high, uint8_t* reg_low )
 {
 	WriteCR( MIREGADR, phy_addr );
 	WriteCR( MICMD, 0x01 );    // MII Read Enable bit
@@ -121,125 +154,41 @@ static void ReadPHYReg( uint8_t phy_addr, uint8_t* reg_high, uint8_t* reg_low )
 	*reg_high = ReadCR( MIRDH );
 }
 
-static void WritePHYReg( uint8_t phy_addr, uint8_t reg_high, uint8_t reg_low )
+void ENC28J60::WritePHYReg( uint8_t phy_addr, uint8_t reg_high, uint8_t reg_low )
 {
 	WriteCR( MIREGADR, phy_addr );
 	WriteCR( MIWRL, reg_low );
 	WriteCR( MIWRH, reg_high );
 }
 
-static void ReadBufferMem( uint8_t* dst, uint8_t len )
+void ENC28J60::ReadBufferMem( uint8_t* dst, uint8_t len )
 {
 	__disable_irq();
-	CS_Low();
+	m_CS.Lo();
 	// Read buffer memory command
-	SPI0_TxRx( _RBM() );
+	m_SPI.TxRx( _RBM() );
 	int i = 0;
 	for( i = 0; i < len; ++i ){
-		dst[i] = SPI0_TxRx(0x00);
+		dst[i] = m_SPI.TxRx(0x00);
 	}
-	CS_High();
+	m_CS.Hi();
 	__enable_irq();
 }
 
-static void WriteBufferMem( const uint8_t* data, uint16_t len )
+void ENC28J60::WriteBufferMem( const uint8_t* data, uint16_t len )
 {
 	__disable_irq();
-	CS_Low();
+	m_CS.Lo();
 	// Write buffer memory command
-	SPI0_TxRx( _WBM() );
-	int i = 0;
-	for( i = 0; i < len; ++i ){
-		SPI0_TxRx( data[i] );
-	}
-	CS_High();
+	m_SPI.TxRx( _WBM() );
+	m_SPI.Send( reinterpret_cast<const uint16_t*>(data), len );
+	m_CS.Hi();
 	__enable_irq();
 }
 
 
-
-
-void Init_ENC28J60(void)
-{
-	// システムリセット
-	Reset_ENC28J60();
-	// PHYの初期化
-	Init_PHY_ENC28J60();
-	// Pkt Buffer　の初期化
-	Init_PktBuffer_ENC28J60();
-	// Pkt Filter の初期化
-	Init_PktFilter_ENC28J60();
-	// MACの初期化
-	Init_MAC_ENC28J60();
-	// 割り込み設定
-	Init_Interrupt_ENC28J60();
-	// Ethernet Control 初期化
-	Init_EthControl_ENC28J60();
-
-	// デバッグ用
-	Show_Setting_ENC28J60();
-}
-
-int Is_LinkUP_ENC28J60(void)
-{
-	uint8_t phstat2[2];
-	ReadPHYReg( PHSTAT2, &phstat2[0], &phstat2[1] );
-
-	// PHSTAT2 10bit LSTAT　をチェック
-	// PHSTAT2 の Hi側を調べている
-	return phstat2[0] & (1 << 2);
-}
-
-const uint8_t* Get_MACAddr_ENC28J60(void)
-{
-	return sMACAddr;
-}
-
-Packet* Use_TxPktBuf_ENC28J60(void)
-{
-	if( sIsTxPktBufInuse ){
-		return 0;
-	}
-
-	sIsTxPktBufInuse = 1;
-	// 先頭の1byteは 送信時の MACコントロール用で、ethernet ヘッダには関係ないので
-	// offsetしたアドレスを返す
-	sTxPkt.data = sTxPktBuf;
-	sTxPkt.len = 0;
-
-	return &sTxPkt;
-}
-
-void Free_TxPktBuf_ENC28J60( Packet* packet )
-{
-	if( packet != (&sTxPkt) ){
-		return;
-	}
-	sIsTxPktBufInuse = 0;
-}
-
-Packet* Use_RxPktBuf_ENC28J60(void)
-{
-	if( sIsRxPktBufInuse ){
-		return 0;
-	}
-
-	sIsRxPktBufInuse = 1;
-	sRxPkt.data = sRxPktBuf;
-	sRxPkt.len  = 0;
-
-	return &sRxPkt;
-}
-
-void Free_RxPktBuf_ENC28J60( Packet* packet )
-{
-	if( packet != (&sRxPkt) ){
-		return;
-	}
-	sIsRxPktBufInuse = 0;
-}
-
-void SendPacket_ENC28J60( const Packet* packet_out )
+// Public functions
+bool ENC28J60::Send( const PacketPtr& frame )
 {
 	// TXRTX:1 なら送信中なので待つ
 	while( ReadCR(ECON1) & 0x08 ) {
@@ -253,7 +202,7 @@ void SendPacket_ENC28J60( const Packet* packet_out )
 	}
 
 	uint16_t tx_start_addr = TX_BUFFER_START;
-	uint16_t tx_end_addr = (TX_BUFFER_START + packet_out->len);
+	uint16_t tx_end_addr = (TX_BUFFER_START + frame->Size());
 
 	// ENC28J60側の送信バッファ 書き込みスタートアドレス設定
 	WriteCR( EWRPTL, tx_start_addr & 0xFF );
@@ -268,21 +217,27 @@ void SendPacket_ENC28J60( const Packet* packet_out )
 	// macon3 の設定をそのまま使用
 	uint8_t control_byte[1] = { 0x0E };
 	WriteBufferMem( control_byte, 1 );
-	WriteBufferMem( packet_out->data, packet_out->len );
+	WriteBufferMem( frame->Head(), frame->Size() );
 
 	BitFieldSet( ECON1, 0x08 );    // TXRTS: Transmit Request to Send Enable
+
+	return true;
 }
 
-int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in )
+bool ENC28J60::Recv( PacketPtr* frame )
 {
+	if( Get_RemainPacketCount() == 0 ){
+		return false;
+	}
+
 	uint8_t header[6] = {0, };
 	int status = 0;
 
-	WriteCR( ERDPTL, sNextPacketPtr & 0xFF );
-	WriteCR( ERDPTH, sNextPacketPtr >> 8 );
+	WriteCR( ERDPTL, m_Rx_NextPktPtr & 0xFF );
+	WriteCR( ERDPTH, m_Rx_NextPktPtr >> 8 );
 
 	ReadBufferMem( header, 6 );    // next packet pointer + status vector を読む
-	sNextPacketPtr = header[0] | (header[1] << 8);
+	m_Rx_NextPktPtr = header[0] | (header[1] << 8);
 	uint16_t recv_byte = header[2] | (header[3] << 8);
 	recv_byte -= 4;    // CRC は読まない
 
@@ -290,61 +245,65 @@ int CopyPacketFromRecvBuffer_ENC28J60( Packet* packet_in )
 	if( header[4] & (1 << 4) ){
 		status = RECV_CRCERR;
 	}
-	else if( !packet_in ){
-		// ドロップさせる
+
+	PacketPtr rx_frame = Create_Packet( recv_byte );
+	if( rx_frame.isNull() ){
 		status = RECV_DROPPKT;
 	}
 	else {
 		status = RECV_VALIDPKT;
 		// 実際のデータを読む
-		ReadBufferMem( packet_in->data, recv_byte );
-		packet_in->len = recv_byte;
+		ReadBufferMem( rx_frame->Head(), rx_frame->Size() );
 	}
 
 
 	// 読み込みポインタを次のアドレスに進める
 	// Rev.B4 Errata シート参照
-	if( (sNextPacketPtr - 1) < RX_BUFFER_START || (sNextPacketPtr - 1) > RX_BUFFER_END ){
+	if( (m_Rx_NextPktPtr - 1) < RX_BUFFER_START || (m_Rx_NextPktPtr - 1) > RX_BUFFER_END ){
 		WriteCR( ERXRDPTL, RX_BUFFER_END & 0xFF );
 		WriteCR( ERXRDPTH, RX_BUFFER_END >> 8 );
 	}
 	else {
-		WriteCR( ERXRDPTL, (sNextPacketPtr - 1) & 0xFF );
-		WriteCR( ERXRDPTH, (sNextPacketPtr - 1) >> 8 );
+		WriteCR( ERXRDPTL, (m_Rx_NextPktPtr - 1) & 0xFF );
+		WriteCR( ERXRDPTH, (m_Rx_NextPktPtr - 1) >> 8 );
 	}
 
 	// パケットを処理したので、パケットカウントを1つ減らす
 	BitFieldSet( ECON2, (1 << 6) );
 
-	return status;
+	return status == RECV_VALIDPKT ? true : false;
 }
 
-int Get_RemainPacketCount(void)
+uint32_t ENC28J60::get_RxRemainPacketCount()
+{
+	return Get_RemainPacketCount();
+}
+
+bool ENC28J60::isLinkUp()
+{
+	uint8_t phstat2[2];
+	ReadPHYReg( PHSTAT2, &phstat2[0], &phstat2[1] );
+
+	// PHSTAT2 10bit LSTAT　をチェック
+	// PHSTAT2 の Hi側を調べている
+	return phstat2[0] & (1 << 2);
+}
+
+const uint8_t* ENC28J60::getMacAddr() const
+{
+	return m_Settings.macaddr;
+}
+
+uint8_t ENC28J60::Get_RemainPacketCount()
 {
 	// eratta sheet 参照
 	// PKTIF だけでは受信パケットがあるかどうか判断できない時があるらしい。
 	return ReadCR(EPKTCNT);
 }
 
-int RecvPacket_ENC28J60( Packet** packet_in )
+int ENC28J60::Interrupt_Callback()
 {
-	if( Get_RemainPacketCount() == 0 ){
-		return RECV_NOPKT;
-	}
-
-	if( sIsRxPktBufInuse ){
-		// パケットバッファが枯渇してるのでドロップさせる
-		*packet_in = 0;
-	}
-	else {
-		*packet_in = Use_RxPktBuf_ENC28J60();
-	}
-
-	return CopyPacketFromRecvBuffer_ENC28J60( *packet_in );
-}
-
-int InterruptCallback_ENC28J60(void)
-{
+	DisableInterrupt();
 	int status = 0;
 	uint8_t eir = ReadCR(EIR);
 
@@ -373,27 +332,32 @@ int InterruptCallback_ENC28J60(void)
 		BitFieldClear( EIR, RXERIF );
 	}
 
+	GPIO0IC |= _BV(3);
+
+	// 割り込みを有効にする
+	// パケット受信割り込みは、今送られてきたパケットをすべて処理したら割り込み許可する
+	EnableTxRxErrorInterrupt();
+	if( get_RxRemainPacketCount() == 0 ){
+		// パケットを受信しつくしたので割り込み有効に
+		EnableRecvPktInterrupt();
+	}
+
+	if( status & INT_LINKCHANGE ){
+		UART_Print( "PHY link status change" );
+	}
+	if( status & INT_RXERROR ){
+		UART_Print( "RxError, reset rx buffer" );
+	}
+	if( status & INT_TXERROR ){
+		UART_Print( "TxError, reset tx buffer" );
+	}
+
 	return status;
 }
 
-void EnableTxRxErrorInterrupt_ENC28J60(void)
+void ENC28J60::Reset()
 {
-	WriteCR( EIE, (INT_ENABLE | TXERIF | RXERIF) );
-}
-
-void EnableRecvPktInterrupt_ENC28J60(void)
-{
-	WriteCR( EIE, (INT_ENABLE | PKTIF) );
-}
-
-void DisableInterrupt_ENC28J60(void)
-{
-	WriteCR( EIE, INT_ENABLE );
-}
-
-void Reset_ENC28J60(void)
-{
-	SPI0_TxRx( _SRC() );
+	m_SPI.TxRx( _SRC() );
 	Systick_Wait( 1 );   // リセット後50us 以上待つ必要があるとのことなので、1ms待つ
 	while( !(ReadCR(ESTAT) & 0x01) ) ;    // ClockReady になるまで待つ
 
@@ -404,7 +368,7 @@ void Reset_ENC28J60(void)
 	UART_Print( "ENC28J60 reset end" );
 }
 
-void Init_PHY_ENC28J60(void)
+void ENC28J60::Init_PHY()
 {
 	// LANポートのLED設定
 	// PHLCON に書く値 low 8bit, LEDB blink fast
@@ -413,7 +377,7 @@ void Init_PHY_ENC28J60(void)
 	//WritePHYReg( PHLCON, 0x0A, 0xA2 );
 }
 
-void Init_PktBuffer_ENC28J60(void)
+void ENC28J60::Init_PktBuffer()
 {
 	// Rx buffer の範囲を指定
 	WriteCR( ERXSTL, RX_BUFFER_START & 0xFF );
@@ -430,14 +394,14 @@ void Init_PktBuffer_ENC28J60(void)
 	WriteCR( ETXNDH, TX_BUFFER_END >> 8 );
 }
 
-void Init_PktFilter_ENC28J60(void)
+void ENC28J60::Init_PktFilter()
 {
 	// CECEN: CRC validity check Enable
 	// packet filter はとりあえず使用しない
 	WriteCR( ERXFCON, 0x20 );
 }
 
-void Init_MAC_ENC28J60(void)
+void ENC28J60::Init_MAC()
 {
 	// TXPAUS, RXPAUS: pause frame の送信受信を有効
 	// MARXEN: MACのフレーム受信を有効
@@ -462,22 +426,22 @@ void Init_MAC_ENC28J60(void)
 	WriteCR( MAADR6, sMACAddr[5] );
 }
 
-void Init_Interrupt_ENC28J60(void)
+void ENC28J60::Init_Interrupt()
 {
 	// 割り込み有効
-	EnableTxRxErrorInterrupt_ENC28J60();
-	EnableRecvPktInterrupt_ENC28J60();
+	EnableTxRxErrorInterrupt();
+	EnableRecvPktInterrupt();
 
 	UART_Print( "Interrupt Setting" );
 }
 
-void Init_EthControl_ENC28J60(void)
+void ENC28J60::Init_EthControl()
 {
 	// 受信パケットの受付を有効
 	BitFieldSet( ECON1, (1 << 2) );
 }
 
-void Show_Setting_ENC28J60(void)
+void ENC28J60::Show_Setting()
 {
 	UART_Print( "ENC28J60 Setting Info" );
 
@@ -505,3 +469,19 @@ void Show_Setting_ENC28J60(void)
 	uint8_t eie = ReadCR(EIE);
 	UART_HexPrint( &eie, 1 ); UART_NewLine();
 }
+
+void ENC28J60::EnableTxRxErrorInterrupt()
+{
+	WriteCR( EIE, (INT_ENABLE | TXERIF | RXERIF) );
+}
+
+void ENC28J60::EnableRecvPktInterrupt()
+{
+	WriteCR( EIE, (INT_ENABLE | PKTIF) );
+}
+
+void ENC28J60::DisableInterrupt()
+{
+	WriteCR( EIE, INT_ENABLE );
+}
+
