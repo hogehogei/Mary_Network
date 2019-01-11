@@ -21,10 +21,14 @@
 #include "timer32.h"
 #include "uart.h"
 #include "systick.h"
-#include "drv/spi.h"
-#include <drv/ethif_drv.hpp>
-#include "ENC28J60.h"
 #include "network.h"
+#include "ENC28J60.h"
+
+#include "lib/util/Endian.hpp"
+#include "lib/net/link_layer.hpp"
+#include "lib/net/icmp_client.hpp"
+
+using ByteOrder = exlib::Endian<exlib::BigEndian>;
 
 // TODO: insert other definitions and declarations here
 
@@ -38,39 +42,14 @@ static const uint32_t skLEDColorTbl[] = {
 		LED_COLOR_WHITE,
 };
 
-Packet* gRxPkt = 0;
-int gARPRequestCompleted = 0;
-int gIsRecvPkt = 0;
-int gSendPktWaitCount = 0;
 int gLEDCount = 0;
 
-Host gHostSrc;
-Host gHostDst;
+uint32_t g_PacketRecvTimer = 0;
+uint32_t g_PingSendTimer = 0;
+
 int  gIsSetSrcHostInfo = 1;
 
-static void Init_HostInfo(void)
-{
-	Host src = {
-			{ 0, },
-			{ 192, 168, 24, 150 },
-			24   // 255.255.255.0
-	};
-	gHostSrc = src;
-
-	Host dst = {
-			{ 0, },
-			{ 192, 168, 24, 50 },
-			0
-	};
-	gHostDst = dst;
-
-	const uint8_t* srcmac = Get_MACAddr_ENC28J60();
-	int i = 0;
-	for( i = 0; i < 6; ++i ){
-		gHostSrc.macaddr[i] = srcmac[i];
-	}
-}
-
+#if 0
 static int CheckPacketAddressDestination( const Packet* pkt, const Host* srchost )
 {
 	const Ether_Hdr* ethhdr = (const Ether_Hdr*)pkt->data;
@@ -104,15 +83,17 @@ static int CheckPacketAddressDestination( const Packet* pkt, const Host* srchost
 
 	return 1;
 }
+#endif
 
 static void Show_ICMPEchoReply( const Packet* pkt )
 {
 	UART_Print( "Receive ICMP Echo Reply" );
 }
 
-void SendPacketTimer(void)
+void Update1msTimer(void)
 {
-	++gSendPktWaitCount;
+	++g_PacketRecvTimer;
+	++g_PingSendTimer;
 	++gLEDCount;
 }
 
@@ -153,80 +134,35 @@ int main(void) {
 	UART_Print( "Init_Systick()");
 	// Timer32B1 の初期化 パケット送信タイマーに用いる
 	Init_Timer32B1( 1000 );    // 1ms
-	Timer32B1_SetCallback( SendPacketTimer );
+	Timer32B1_SetCallback( Update1msTimer );
 	UART_Print( "Init_Timer32B1()" );
-	// SPI0の初期化
-	SPI_Drv::Settings spi_ch0_settings = {
-			0,
-			8,
-			SPI_Drv::ROLE_MASTER,
-			SPI_Drv::MODE0
-	};
-	SPI_Drv::Initialize( spi_ch0_settings );
-	UART_Print( "Init_SPI()" );
 
-	// ENC28J60 Eth Controller の初期化
-	Eth_Settings eth0_settings = {
-			0,
-			{ 0x52, 0x54, 0x00, 0x12, 0xFF, 0x10 }
-	};
-	EthIf_Drv::Initialize( eth0_settings );
-	Init_HostInfo();
+	// ネットワークの初期化
+	Initialize_Network();
 
 	int led_idx = 0;
 	TurnOnLED( skLEDColorTbl[led_idx] );
 
-	Eth_If eth0 = EthIf_Drv::Instance( 0 );
+	uint8_t tmp[] = { 192, 168, 24, 2 };
+	uint32_t target_ipaddr = ByteOrder::GetUint32( tmp );
 	// main loop
 	while(1){
-		while( gSendPktWaitCount <= 1000 ){
 
-			asm( "wfi" );
+		if( g_PacketRecvTimer >= 10 ){
+			g_PacketRecvTimer = 0;
+
+			LinkLayer& l2 = LinkLayer::Instance();
+			l2.Recv_AllInterface();
+			Recv_ICMP_Reply();
 		}
 
-		// 受信パケットがある？
-		while( eth0.get_RxRemainPacketCount() > 0 ){
-			EthFramePtr eth_frame;
+		if( g_PingSendTimer >= 1000 ){
+			g_PingSendTimer = 0;
 
-			if( eth0.Recv( &eth_frame ) &&
-				CheckPacketAddressDestination( gRxPkt, &gHostSrc ) ){
-				if( IsARPReply( gRxPkt ) ){
-					UART_Print( "Receive ARP reply" );
-					Process_ARPReply( gRxPkt, &gHostDst );
-					gARPRequestCompleted = 1;
-				}
-				else if( IsICMPEchoReply( gRxPkt ) ){
-					Show_ICMPEchoReply( gRxPkt );
-				}
-			}
-
-			Free_RxPktBuf_ENC28J60( gRxPkt );
-			gRxPkt = 0;
+			ICMP_Client& icmp = ICMP_Client::Instance();
+			icmp.Ping( target_ipaddr );
 		}
-
-		if( gSendPktWaitCount > 1000 ){
-			Packet* pkt = 0;
-			if( !gARPRequestCompleted ){
-				pkt = Create_ARPRequest( &gHostSrc, &gHostDst );
-				UART_Print( "Send ARP request" );
-			}
-			else {
-				// ping 送信
-				pkt = Create_ICMPEchoRequest( &gHostSrc, &gHostDst );
-				UART_Print( "Send ICMP echo request" );
-			}
-
-			SendPacket_ENC28J60( pkt );
-			Free_TxPktBuf_ENC28J60( pkt );
-			gSendPktWaitCount = 0;
-		}
-
-		if( gLEDCount > 1000 ){
-			TurnOffLED( skLEDColorTbl[led_idx] );
-			led_idx = (led_idx + 1) % (sizeof(skLEDColorTbl) / 4);
-			TurnOnLED( skLEDColorTbl[led_idx] );
-			gLEDCount = 0;
-		}
+		asm( "wfi" );
 	}
 
     return 0 ;

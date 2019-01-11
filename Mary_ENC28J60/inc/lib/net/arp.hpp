@@ -9,7 +9,17 @@
 #define LIB_NET_ARP_HPP_
 
 #include <cstdint>
-#include "lib/net/packet.hpp"
+#include "lib/net/ethernet.hpp"
+
+
+
+constexpr uint16_t k_ARP_Operation_ARP_Request	= 0x0001;
+constexpr uint16_t k_ARP_Operation_ARP_Reply	= 0x0002;
+
+
+
+
+
 
 struct ARP_Hdr
 {
@@ -47,17 +57,17 @@ public:
 
 	const uint8_t* DstMacAddr() const;
 	const uint8_t* SrcMacAddr() const;
-	void DstMacAddr( uint8_t* macaddr );
-	void SrcMacAddr( uint8_t* macaddr );
+	void DstMacAddr( const uint8_t* macaddr );
+	void SrcMacAddr( const uint8_t* macaddr );
 
-	const uint8_t* DstIpAddr() const;
-	const uint8_t* SrcIpAddr() const;
-	void DstIpAddr( uint8_t* ipaddr );
-	void SrcIpAddr( uint8_t* ipaddr );
+	uint32_t DstIpAddr() const;
+	uint32_t SrcIpAddr() const;
+	void DstIpAddr( uint32_t ipaddr );
+	void SrcIpAddr( uint32_t ipaddr );
 
 private:
 
-	ARP_Hdr* m_ARP_Hdr;
+	ARP_Hdr*	m_ARP_Hdr;
 };
 
 bool Is_ARP_Packet( const Ethernet& eth );

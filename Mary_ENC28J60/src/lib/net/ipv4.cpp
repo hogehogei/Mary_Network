@@ -113,7 +113,7 @@ void IPv4::Protocol( uint8_t protocol )
 	m_IPv4_Hdr->protocol = protocol;
 }
 
-uint16_t IPv4::Chksum() const
+uint16_t IPv4::ChkSum() const
 {
 	return ByteOrder::GetUint16( m_IPv4_Hdr->chksum );
 }
@@ -125,25 +125,26 @@ void IPv4::CalculateChkSum()
 	ByteOrder::SetUint16( m_IPv4_Hdr->chksum, chksum );
 }
 
-const uint8_t* IPv4::SrcAddr() const
+uint32_t IPv4::SrcAddr() const
 {
-	return m_IPv4_Hdr->src_addr;
+	return ByteOrder::GetUint32( m_IPv4_Hdr->src_addr );
 }
 
-uint8_t* IPv4::SrcAddr()
+void IPv4::SrcAddr( uint32_t addr )
 {
-	return m_IPv4_Hdr->src_addr;
+	ByteOrder::SetUint32( m_IPv4_Hdr->src_addr, addr );
 }
 
-const uint8_t* IPv4::DstAddr() const
+uint32_t IPv4::DstAddr() const
 {
-	return m_IPv4_Hdr->dst_addr;
+	return ByteOrder::GetUint32( m_IPv4_Hdr->dst_addr );
 }
 
-uint8_t* IPv4::DstAddr()
+void IPv4::DstAddr( uint32_t addr )
 {
-	return m_IPv4_Hdr->dst_addr;
+	ByteOrder::SetUint32( m_IPv4_Hdr->dst_addr, addr );
 }
+
 
 const uint8_t* IPv4::Data() const
 {

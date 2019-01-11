@@ -58,14 +58,14 @@ public:
 	uint8_t Protocol() const;
 	void Protocol( uint8_t protocol );
 
-	uint16_t Chksum() const;
+	uint16_t ChkSum() const;
 	void CalculateChkSum();
 
-	const uint8_t* SrcAddr() const;
-	uint8_t* SrcAddr();
+	uint32_t SrcAddr() const;
+	void SrcAddr( uint32_t addr );
 
-	const uint8_t* DstAddr() const;
-	uint8_t* DstAddr();
+	uint32_t DstAddr() const;
+	void DstAddr( uint32_t addr );
 
 	const uint8_t* Data() const;
 	uint8_t* Data();

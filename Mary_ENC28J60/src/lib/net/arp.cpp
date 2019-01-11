@@ -76,38 +76,34 @@ const uint8_t* ARP::SrcMacAddr() const
 	return m_ARP_Hdr->macsrc;
 }
 
-void ARP::DstMacAddr( uint8_t* macaddr )
+void ARP::DstMacAddr( const uint8_t* macaddr )
 {
 	SetMacAddr( macaddr, m_ARP_Hdr->macdst );
 }
 
-void ARP::SrcMacAddr( uint8_t* macaddr )
+void ARP::SrcMacAddr( const uint8_t* macaddr )
 {
 	SetMacAddr( macaddr, m_ARP_Hdr->macsrc );
 }
 
-const uint8_t* ARP::DstIpAddr() const
+uint32_t ARP::DstIpAddr() const
 {
-	return m_ARP_Hdr->ipdst;
+	return ByteOrder::GetUint32( m_ARP_Hdr->ipdst );
 }
 
-const uint8_t* ARP::SrcIpAddr() const
+uint32_t ARP::SrcIpAddr() const
 {
-	return m_ARP_Hdr->ipsrc;
+	return ByteOrder::GetUint32( m_ARP_Hdr->ipsrc );
 }
 
-void ARP::DstIpAddr( uint8_t* ipaddr )
+void ARP::DstIpAddr( uint32_t ipaddr )
 {
-	for( int i = 0; i < 4; ++i ){
-		m_ARP_Hdr->ipdst[i] = ipaddr[i];
-	}
+	ByteOrder::SetUint32( m_ARP_Hdr->ipdst, ipaddr );
 }
 
-void ARP::SrcIpAddr( uint8_t* ipaddr )
+void ARP::SrcIpAddr( uint32_t ipaddr )
 {
-	for( int i = 0; i < 4; ++i ){
-		m_ARP_Hdr->ipsrc[i] = ipaddr[i];
-	}
+	ByteOrder::SetUint32( m_ARP_Hdr->ipsrc, ipaddr );
 }
 
 bool Is_ARP_Packet( const Ethernet& eth )
@@ -127,5 +123,4 @@ bool Is_ARP_Reply( const ARP& arp )
 
 	return false;
 }
-
 

@@ -1,5 +1,5 @@
 /*
- * eth_frame.hpp
+ * packet.hpp
  *
  *  Created on: 2018/11/30
  *      Author: hogehogei
@@ -11,6 +11,11 @@
 #include <cstdint>
 #include "lib/util/RefCount.hpp"
 #include "lib/util/IntrusivePtr.hpp"
+#include "lib/net/ethernet.hpp"
+#include "lib/net/ipv4.hpp"
+#include "lib/net/arp.hpp"
+#include "lib/net/icmp.hpp"
+
 
 class Packet : public exlib::RefCount
 {
@@ -22,11 +27,13 @@ public:
 
 	const uint8_t* Head() const;
 	uint8_t* Head();
-	const uint8_t* Data() const;
-	uint8_t* Data();
+
+	IPv4 Get_IPv4();
+	Ethernet Get_Eth();
+	ARP Get_ARP();
+	ICMP Get_ICMP();
 
 	uint16_t Size() const;
-	uint16_t DataSize() const;
 
 private:
 
@@ -34,9 +41,12 @@ private:
 	uint16_t m_Len;
 };
 
-typedef exlib::IntrusivePtr<Packet> PacketPtr;
+using PacketPtr = exlib::IntrusivePtr<Packet>;
 
-PacketPtr Create_Packet( uint16_t datasize );
+PacketPtr Create_Packet( uint32_t packet_size );
+PacketPtr Create_ARP_Packet();
+PacketPtr Create_ICMP_Packet( uint32_t payload );
+
 
 
 #endif /* DRV_PACKET_HPP_ */

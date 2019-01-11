@@ -34,6 +34,7 @@
 
 #include <stdlib.h>
 
+#if 0
 void *operator new(size_t size)
 {
     return malloc(size);
@@ -53,6 +54,7 @@ void operator delete[](void *p)
 {
     free(p);
 }
+#endif
 
 extern "C" int __aeabi_atexit(void *object,
 		void (*destructor)(void *),

@@ -271,6 +271,8 @@ bool ENC28J60::Recv( PacketPtr* frame )
 	// パケットを処理したので、パケットカウントを1つ減らす
 	BitFieldSet( ECON2, (1 << 6) );
 
+	*frame = rx_frame;
+
 	return status == RECV_VALIDPKT ? true : false;
 }
 

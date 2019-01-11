@@ -7,12 +7,6 @@
 
 #include <lib/net/packet.hpp>
 
-constexpr uint32_t k_HeaderSize = 14;
-constexpr uint32_t k_MacAddrLen = 6;
-
-constexpr uint32_t k_DstMacPos  = 0;
-constexpr uint32_t k_SrcMacPos  = 6;
-constexpr uint32_t k_TypePos    = 12;
 
 Packet::Packet()
 : m_RawPacket( nullptr ),
@@ -20,8 +14,8 @@ Packet::Packet()
 {}
 
 Packet::Packet( uint16_t datasize )
-: m_RawPacket( new uint8_t[datasize + k_HeaderSize] ),
-  m_Len( datasize + k_HeaderSize )
+: m_RawPacket( new uint8_t[datasize] ),
+  m_Len( datasize )
 {
 
 }
@@ -41,14 +35,19 @@ uint8_t* Packet::Head()
 	return m_RawPacket;
 }
 
-const uint8_t* Packet::Data() const
+IPv4 Packet::Get_IPv4()
 {
-	return m_RawPacket + k_HeaderSize;
+	return IPv4( m_RawPacket + sizeof(Ether_Hdr) );
 }
 
-uint8_t* Packet::Data()
+Ethernet Packet::Get_Eth()
 {
-	return m_RawPacket + k_HeaderSize;
+	return Ethernet( m_RawPacket );
+}
+
+ARP Packet::Get_ARP()
+{
+	return ARP( m_RawPacket + sizeof(Ether_Hdr) );
 }
 
 uint16_t Packet::Size() const
@@ -56,14 +55,19 @@ uint16_t Packet::Size() const
 	return m_Len;
 }
 
-uint16_t Packet::DataSize() const
+
+PacketPtr Create_Packet( uint32_t packet_size )
 {
-	return m_Len - k_HeaderSize;
+	return PacketPtr( new Packet( packet_size ) );
 }
 
-PacketPtr Create_Packet( uint16_t datasize )
+PacketPtr Create_ARP_Packet()
 {
-	return PacketPtr( new Packet(datasize) );
+	return PacketPtr( new Packet(sizeof(Ether_Hdr) + sizeof(ARP_Hdr)) );
 }
 
+PacketPtr Create_ICMP_Packet( uint32_t payload )
+{
+	return PacketPtr( new Packet(sizeof(Ether_Hdr) + sizeof(IPv4_Hdr) + sizeof(ICMP_Hdr) + payload) );
+}
 

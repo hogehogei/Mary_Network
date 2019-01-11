@@ -10,6 +10,9 @@
 
 #include <cstdint>
 
+constexpr uint16_t k_EthType_ARP	= 0x0806;
+constexpr uint16_t k_EthType_IPv4	= 0x0800;
+
 // network パケットの構造体
 // なぜ 16/32bit の値を使わないかというと
 // CortexM0 はUnalign Memory Access が一切できない

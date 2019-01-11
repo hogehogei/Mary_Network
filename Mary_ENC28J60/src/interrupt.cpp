@@ -5,7 +5,7 @@
  *      Author: hogehogei
  */
 
-#include <drv/ethernet.hpp>
+#include "drv/ethif_drv.hpp"
 #include <stdint.h>
 #include "LPC1100.h"
 #include "interrupt.h"

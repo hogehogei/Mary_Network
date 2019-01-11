@@ -32,7 +32,7 @@ public:
 		return m_Array[idx];
 	}
 
-	T operator[]( std::size_t idx ) &&
+	T operator[]( std::size_t idx ) const &&
 	{
 		std::move( m_Array[idx] );
 	}
