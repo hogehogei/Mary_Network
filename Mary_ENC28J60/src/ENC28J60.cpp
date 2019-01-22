@@ -7,17 +7,6 @@
 #include "network.h"
 
 
-// MAC Address
-static uint8_t sMACAddr[6] = {
-		MACADDR1,
-		MACADDR2,
-		MACADDR3,
-		MACADDR4,
-		MACADDR5,
-		MACADDR6
-};
-
-
 ENC28J60::ENC28J60()
 {}
 
@@ -39,6 +28,9 @@ bool ENC28J60::Initialize( const Eth_Settings& settings, uint8_t spi_ch, const G
 	GPIO0IE  |= _BV(3);
 	__enable_irqn( PIO_0_IRQn );
 
+	// チップセレクトをHiに固定
+	m_CS.Hi();
+
 	// システムリセット
 	Reset();
 	// PHYの初期化
@@ -56,9 +48,6 @@ bool ENC28J60::Initialize( const Eth_Settings& settings, uint8_t spi_ch, const G
 
 	// デバッグ用
 	Show_Setting();
-
-	// チップセレクトをHiに固定
-	m_CS.Hi();
 
 	return true;
 }
@@ -420,12 +409,12 @@ void ENC28J60::Init_MAC()
 	WriteCR( MAIPGL, 0x12 );
 
 	// MAC Address の設定
-	WriteCR( MAADR1, sMACAddr[0] );
-	WriteCR( MAADR2, sMACAddr[1] );
-	WriteCR( MAADR3, sMACAddr[2] );
-	WriteCR( MAADR4, sMACAddr[3] );
-	WriteCR( MAADR5, sMACAddr[4] );
-	WriteCR( MAADR6, sMACAddr[5] );
+	WriteCR( MAADR1, m_Settings.macaddr[0] );
+	WriteCR( MAADR2, m_Settings.macaddr[1] );
+	WriteCR( MAADR3, m_Settings.macaddr[2] );
+	WriteCR( MAADR4, m_Settings.macaddr[3] );
+	WriteCR( MAADR5, m_Settings.macaddr[4] );
+	WriteCR( MAADR6, m_Settings.macaddr[5] );
 }
 
 void ENC28J60::Init_Interrupt()

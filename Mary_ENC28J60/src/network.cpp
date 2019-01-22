@@ -18,8 +18,9 @@ void Initialize_Network()
 			SPI_Drv::ROLE_MASTER,
 			SPI_Drv::MODE0
 	};
-	SPI_Drv::Initialize( spi_ch0_settings );
-	UART_Print( "Init_SPI()" );
+	if( SPI_Drv::Initialize( spi_ch0_settings ) ){
+		UART_Print( "Init_SPI()" );
+	}
 
 	// ENC28J60 Eth Controller の初期化
 	Eth_Settings eth0_settings = {

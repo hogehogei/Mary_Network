@@ -25,6 +25,7 @@
 #include "ENC28J60.h"
 
 #include "lib/util/Endian.hpp"
+#include "lib/memory/allocator.hpp"
 #include "lib/net/link_layer.hpp"
 #include "lib/net/icmp_client.hpp"
 
@@ -41,60 +42,24 @@ static const uint32_t skLEDColorTbl[] = {
 		LED_COLOR_FUCHSIA,
 		LED_COLOR_WHITE,
 };
+static constexpr uint32_t sk_LEDColorTbl_Size = sizeof(skLEDColorTbl) / sizeof(uint32_t);
 
-int gLEDCount = 0;
+int g_LEDCount = 0;
 
 uint32_t g_PacketRecvTimer = 0;
 uint32_t g_PingSendTimer = 0;
 
 int  gIsSetSrcHostInfo = 1;
 
-#if 0
-static int CheckPacketAddressDestination( const Packet* pkt, const Host* srchost )
-{
-	const Ether_Hdr* ethhdr = (const Ether_Hdr*)pkt->data;
-
-	if( !IsSameMacAddr( srchost->macaddr, ethhdr->macdst ) &&
-		!IsBroadCastMacAddr( ethhdr->macdst )
-	){
-		// macaddressが違うので受け付けない
-		return 0;
-	}
-
-	uint16_t type = Get_BEU16( ethhdr->type );
-	if( type == 0x0800 ){
-		const IP_Hdr* iphdr = (const IP_Hdr*)ethhdr->data;
-		uint32_t netmask = (0xFFFFFFFF << (32 - srchost->netmask));
-		uint32_t netaddr_own = Get_BEU32( srchost->ipaddr ) & netmask;
-		uint32_t netaddr_pkt = Get_BEU32( iphdr->dst_addr ) & netmask;
-		uint32_t hostaddr_own = Get_BEU32( srchost->ipaddr ) & ~netmask;
-		uint32_t hostaddr_pkt = Get_BEU32( iphdr->dst_addr ) & ~netmask;
-		if( netaddr_own != netaddr_pkt && netaddr_pkt != netmask ){
-			// 違うネットワークなので受け付けない
-			return 0;
-		}
-		if( hostaddr_own != hostaddr_pkt ){
-			if( (hostaddr_pkt | netmask) != 0xFFFFFFFF ){
-				// ブロードキャストアドレスじゃないので受け付けない
-				return 0;
-			}
-		}
-	}
-
-	return 1;
-}
-#endif
-
-static void Show_ICMPEchoReply( const Packet* pkt )
-{
-	UART_Print( "Receive ICMP Echo Reply" );
-}
+extern unsigned int __init_array_start;
+extern unsigned int __init_array_end;
+extern void call_static_initializers();
 
 void Update1msTimer(void)
 {
 	++g_PacketRecvTimer;
 	++g_PingSendTimer;
-	++gLEDCount;
+	++g_LEDCount;
 }
 
 
@@ -137,6 +102,9 @@ int main(void) {
 	Timer32B1_SetCallback( Update1msTimer );
 	UART_Print( "Init_Timer32B1()" );
 
+    call_static_initializers();
+
+    Initialize_Allocator();
 	// ネットワークの初期化
 	Initialize_Network();
 
@@ -153,14 +121,23 @@ int main(void) {
 
 			LinkLayer& l2 = LinkLayer::Instance();
 			l2.Recv_AllInterface();
-			Recv_ICMP_Reply();
 		}
 
+
 		if( g_PingSendTimer >= 1000 ){
+			//UART_Print( "Send Ping" );
 			g_PingSendTimer = 0;
 
 			ICMP_Client& icmp = ICMP_Client::Instance();
 			icmp.Ping( target_ipaddr );
+		}
+
+
+		if( g_LEDCount >= 1000 ){
+			g_LEDCount = 0;
+			TurnOffLED( skLEDColorTbl[led_idx] );
+			led_idx = (led_idx + 1) % sk_LEDColorTbl_Size;
+			TurnOnLED( skLEDColorTbl[led_idx] );
 		}
 		asm( "wfi" );
 	}

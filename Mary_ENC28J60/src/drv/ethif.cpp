@@ -34,9 +34,10 @@ bool EthIf_Drv::Initialize( const Eth_Settings& settings )
 		return false;
 	}
 
+	GPIO0DIR |= _BV(2);    				 // SSEL0 chipselect by GPIO
 	bool result = m_ENC28J60.Initialize( settings,
 										 k_ENC28J60_SPI_Ch,
-										 GPIO( &GPIO0DIR, 2, GPIO::PORT_LOGIC_L_ON ) );
+										 GPIO( &GPIO0DATA, 2, GPIO::PORT_LOGIC_L_ON ) );
 	m_Eth_If[0] = Eth_If( &m_ENC28J60 );
 
 	return result;

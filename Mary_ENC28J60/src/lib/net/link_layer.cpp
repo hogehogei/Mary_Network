@@ -5,7 +5,6 @@
  *      Author: hogehogei
  */
 
-#include <cstring>
 #include "lib/net/link_layer.hpp"
 #include "lib/net/internet_layer.hpp"
 #include "lib/net/arp_resolver.hpp"
@@ -27,7 +26,11 @@ bool LinkLayer::CreatePort( uint8_t interface_id, Eth_If ethif )
 
 	NetworkPort port;
 	port.interface_id = interface_id;
-	memcpy( port.macaddr, ethif.getMacAddr(), 6 );
+
+	const uint8_t* src = ethif.getMacAddr();
+	for( int i = 0; i < 6; ++i ){
+		port.macaddr[i] = src[i];
+	}
 	port.ethif = ethif;
 
 	m_Port[interface_id] = port;

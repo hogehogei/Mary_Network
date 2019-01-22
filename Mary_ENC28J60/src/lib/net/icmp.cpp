@@ -59,30 +59,3 @@ uint8_t* ICMP::Data()
 {
 	return m_ICMP_Hdr->data;
 }
-
-#if 0
-PacketPtr Create_ICMPEchoRequest()
-{
-	// ICMP Header の作成
-	PacketPtr packet = Create_ICMP_Packet();			// ICMPデータは32byte
-	if( packet.isNull() ){
-		return packet;
-	}
-
-	ICMP icmp = packet->Get_ICMP();
-	icmp.Type( 0x08 );			// ICMP Echo Request
-	icmp.Code( 0x00 );			// Code
-	ByteOrder::SetUint16( icmp.Data(), 0x0100 );
-	ByteOrder::SetUint16( icmp.Data() + 2, ++s_ICMP_EchoSeqID );
-
-	int i = 0;
-	uint8_t* p = icmp.Data() + 4;
-	// ダミーデータ作成  Windowsっぽい感じで
-	for( i = 0; i < 32; ++i ){
-		p[i] = 0x61 + (i % 0x17);
-	}
-	icmp.CalculateChkSum();
-
-	return packet;
-}
-#endif

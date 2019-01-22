@@ -5,10 +5,14 @@
  *      Author: hogehogei
  */
 
-
 #include "lib/net/internet_layer.hpp"
 #include "lib/net/link_layer.hpp"
 #include "lib/net/arp_resolver.hpp"
+#include "lib/net/icmp_client.hpp"
+
+
+uint16_t InternetLayer::s_IP_PktID = 0;
+
 
 RoutingTable::RoutingTable()
  : m_RoutingTbl_Last( 0 )
@@ -95,8 +99,26 @@ bool InternetLayer::AddRoute( const RoutingEntry& entry )
 	return m_RoutingTbl.AddRoute( entry );
 }
 
-void InternetLayer::Send( PacketPtr packet )
+void InternetLayer::Send( PacketPtr packet, uint32_t dst_ipaddr )
 {
+	// 宛先ルートの検索
+	RoutingEntry route;
+	if( !m_RoutingTbl.SearchRoute( dst_ipaddr, &route ) ){
+		// 宛先ルートがないので送れません
+		return;
+	}
+
+	IPv4 ipv4 = packet->Get_IPv4();
+	ipv4.Version( 4 );										// IPv4
+	ipv4.HdrLen( 5 );										// 32bit*5 = 160bit = 20byte
+	ipv4.Tos( 0x00 );										// Type of service
+	ipv4.Id( ++s_IP_PktID );								// Packet ID
+	ipv4.Flag( 0x02 );										// Flag フラグメントを許可しない
+	ipv4.Offset( 0x00 );									// Offset
+	ipv4.TTL( 128 );										// Time to Live
+	ipv4.SrcAddr( route.ipaddr );							// 宛先アドレス
+	ipv4.DstAddr( dst_ipaddr );								// 送信元アドレス
+
 	m_SendQueue.Push( packet );
 }
 
@@ -110,8 +132,12 @@ void InternetLayer::Recv( uint8_t interface_id, const PacketPtr& packet )
 	}
 
 	// とりあえず、TCP/UDPが実装できていないので
-	// ICMP Reply 以外は捨てる方針でいく
-
+	// ICMP以外は捨てる方針でいく
+	IPv4 ipv4 = packet->Get_IPv4();
+	if( ipv4.Protocol() == 0x01 ){
+		ICMP_Client& icmp_client = ICMP_Client::Instance();
+		icmp_client.Recv( packet );
+	}
 }
 
 bool InternetLayer::GetInterface_ByIPAddr( uint32_t ipaddr, uint8_t* interface_id ) const

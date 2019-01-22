@@ -10,6 +10,8 @@
 #include "lib/util/Array.hpp"
 #include "lib/util/RefCount.hpp"
 #include "Exlib_BoundaryTag.hpp"
+#include "led.h"
+#include "uart.h"
 
 // デバッグ出力有効にするにはコメントアウト
 //#define   ENABLE_DEBUG_PRINT
@@ -103,16 +105,16 @@ public:
 
         // 管理領域タグ作成
         mPoolMemSize = buf_alloc_size + BoundaryTagBegin::skBlockOverhead + sizeof(BoundaryTagBegin);
-        mPoolMem = reinterpret_cast<uint8_t*>( allocate( mPoolMemSize ) );
+        mPoolMem = reinterpret_cast<uint8_t*>( GlobalAllocator( mPoolMemSize ) );
 
         // +1しているのは配列が0originだから
         // 配列操作時に getMSBの値をそのまま利用するため
         std::size_t len = (getMSB( mPoolMemSize )+1) * mSLIPartition;
-        mFreeBlock = exlib::Array<BoundaryTagBegin*>( reinterpret_cast<BoundaryTagBegin**>(allocate(len * sizeof(BoundaryTagBegin*))), len );
+        mFreeBlock = exlib::Array<BoundaryTagBegin*>( reinterpret_cast<BoundaryTagBegin**>(GlobalAllocator(len * sizeof(BoundaryTagBegin*))), len, nullptr );
         mFreeListBitFLI = 0;
         len = (getMSB( mPoolMemSize )+1);
-        mFreeListBitSLI = exlib::Array<uint32_t>( reinterpret_cast<uint32_t*>(allocate(len * sizeof(uint32_t))), len );
-        
+        mFreeListBitSLI = exlib::Array<uint32_t>( reinterpret_cast<uint32_t*>(GlobalAllocator(len * sizeof(uint32_t))), len, 0 );
+
         // ダミーのタグを作る
         // 前後のタグを取得するときに、範囲外のメモリにアクセスしないかのチェックを簡単にするため
         uint8_t* p = mPoolMem;
@@ -124,7 +126,6 @@ public:
         p = mPoolMem;
         BoundaryTagBegin* beg = newTag( buf_alloc_size, p );
         registerFreeBlock( beg );
-        
         assert( (unsigned long)(beg + sizeof(BoundaryTagBegin)) % skAlignment == 0 && "set alignment failed." );
 
 #ifdef  ENABLE_DEBUG_PRINT
@@ -163,7 +164,7 @@ public:
 
         // 確保するメモリ領域は必ずアラインメントの倍数以上にする
         uint32_t alloc_size = getAlignmentedSize( size );
-        
+
         // 空きメモリをとってくる
         BoundaryTagBegin* free_block = searchFreeBlock( alloc_size );
         if( !free_block ){
@@ -343,9 +344,9 @@ private:
         unsigned fli, sli;
         getIndex( alloc_size, &fli, &sli );
         unsigned index = calcFreeBlockIndex( fli, sli );
-        
+
         BoundaryTagBegin* b = mFreeBlock[index];
-        
+
         if( !b ){
             if( !getMinFreeListBit( sli+1, mFreeListBitSLI[fli], &sli ) ){
                 if( !getMinFreeListBit( fli+1, mFreeListBitFLI, &fli ) ){
@@ -414,8 +415,17 @@ private:
 
         unsigned fli, sli, index;
         getIndex( memsize, &fli, &sli );
-
         index = calcFreeBlockIndex( fli, sli ) - 1;
+
+        //UART_HexPrint( (uint8_t*)&memsize, 4 );UART_NewLine();
+    	//TurnOnLED( LED_COLOR_BLUE );
+
+    	//unsigned t = mFreeBlock.Size();
+    	//UART_HexPrint( (uint8_t*)&t, 4 ); UART_NewLine();
+    	//UART_HexPrint( (uint8_t*)&index, 4 );UART_NewLine();
+    	//mFreeBlock[0] = nullptr;
+    	//unsigned v = (unsigned)mFreeBlock[0];
+    	//UART_HexPrint( (uint8_t*)&v, 4 ); UART_NewLine();
 
         // フリーリストに追加
         if( mFreeBlock[index] ){
@@ -424,7 +434,7 @@ private:
             mFreeBlock[index] = freeblock;
 
             freeblock->setPrevLink( nullptr );
-         }
+        }
         else {
             fli = index >> mSLIPartitionBits;
             sli = index & (mSLIPartition - 1);  // index % mMinAllocSize

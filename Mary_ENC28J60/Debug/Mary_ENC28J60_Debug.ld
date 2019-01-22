@@ -1,15 +1,15 @@
 /*
  * GENERATED FILE - DO NOT EDIT
  * (c) Code Red Technologies Ltd, 2008-2013
- * (c) NXP Semiconductors 2013-2018
+ * (c) NXP Semiconductors 2013-2019
  * Generated linker script file for LPC1114/301
  * Created from linkscript.ldt by FMCreateLinkLibraries
  * Using Freemarker v2.3.23
- * LPCXpresso v8.2.2 [Build 650] [2016-09-09]  on 2018/11/13 21:29:05
+ * LPCXpresso v8.2.2 [Build 650] [2016-09-09]  on 2019/01/14 22:12:24
  */
 
-INCLUDE "Mary_ENC28J60_library.ld"
-INCLUDE "Mary_ENC28J60_memory.ld"
+INCLUDE "Mary_ENC28J60_Debug_library.ld"
+INCLUDE "Mary_ENC28J60_Debug_memory.ld"
 
 ENTRY(ResetISR)
 
@@ -36,6 +36,8 @@ SECTIONS
         __section_table_end = . ;
 	    /* End of Global Section Table */
 
+
+
         /* Code Read Protection data */
         . = 0x000002FC ;
         PROVIDE(__CRP_WORD_START__ = .) ;
@@ -43,7 +45,7 @@ SECTIONS
         PROVIDE(__CRP_WORD_END__ = .) ;
         ASSERT(!(__CRP_WORD_START__ == __CRP_WORD_END__), "Linker CRP Enabled, but no CRP_WORD provided within application");
         /* End of Code Read Protection */
-        
+
         *(.after_vectors*)
     } >MFlash32
 

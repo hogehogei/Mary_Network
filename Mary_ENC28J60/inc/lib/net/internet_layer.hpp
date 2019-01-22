@@ -73,7 +73,7 @@ public:
 	bool Bind( uint8_t interface_id, const Route& route );
 	bool AddRoute( const RoutingEntry& entry );
 
-	void Send( PacketPtr packet );
+	void Send( PacketPtr packet, uint32_t dst_ipaddr );
 	void Recv( uint8_t interface_id, const PacketPtr& packet );
 
 	bool GetInterface_ByIPAddr( uint32_t ipaddr, uint8_t* interface_id ) const;
@@ -88,6 +88,8 @@ private:
 	InternetLayer();
 	bool TrySendPacket( PacketPtr packet );
 	bool RxFilter_IPv4Addr( uint8_t interface_id, const PacketPtr& packet );
+
+	static uint16_t s_IP_PktID;
 
 	IPAddr_BindEntry	m_IPAddr_BindTbl[k_IPAddr_BindTbl_Size];
 	uint32_t			m_IPAddr_BindTblIdx;

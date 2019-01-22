@@ -7,7 +7,6 @@
 
 #include <lib/net/packet.hpp>
 
-
 Packet::Packet()
 : m_RawPacket( nullptr ),
   m_Len( 0 )
@@ -16,9 +15,7 @@ Packet::Packet()
 Packet::Packet( uint16_t datasize )
 : m_RawPacket( new uint8_t[datasize] ),
   m_Len( datasize )
-{
-
-}
+{}
 
 Packet::~Packet()
 {
@@ -48,6 +45,12 @@ Ethernet Packet::Get_Eth()
 ARP Packet::Get_ARP()
 {
 	return ARP( m_RawPacket + sizeof(Ether_Hdr) );
+}
+
+ICMP Packet::Get_ICMP()
+{
+	uint16_t payload = m_Len - sizeof(Ether_Hdr) + sizeof(IPv4_Hdr) + sizeof(ICMP_Hdr);
+	return ICMP( m_RawPacket + sizeof(Ether_Hdr) + sizeof(IPv4_Hdr), payload );
 }
 
 uint16_t Packet::Size() const

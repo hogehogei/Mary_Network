@@ -8,11 +8,11 @@
 #include "lib/memory/allocator.hpp"
 #include "lib/memory/Exlib_TLSFAllocator.hpp"
 
-uint8_t  s_MemoryPool[k_MemoryPoolSize];
-uint32_t s_AllocatedSize = 0;
-exlib::TLSF_Allocator s_Allocator;
+__attribute__ ((aligned(32))) static uint8_t  s_MemoryPool[k_MemoryPoolSize];
+static uint32_t s_AllocatedSize = 0;
+static exlib::TLSF_Allocator s_Allocator;
 
-void* allocator( uint32_t size )
+void* GlobalAllocator( uint32_t size )
 {
 	if( size == 0 ){
 		return nullptr;
@@ -27,6 +27,11 @@ void* allocator( uint32_t size )
 	s_AllocatedSize += allocate_size;
 
 	return ptr;
+}
+
+void Initialize_Allocator()
+{
+	s_Allocator = exlib::TLSF_Allocator( k_MemoryPool_New_Size );
 }
 
 void* operator new( std::size_t size )

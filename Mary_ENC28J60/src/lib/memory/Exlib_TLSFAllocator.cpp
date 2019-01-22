@@ -13,7 +13,7 @@ TLSF_Allocator::TLSF_Allocator()
 TLSF_Allocator::TLSF_Allocator( uint32_t size )
     : m_Impl( nullptr )
 {
-	void* ptr = allocate( sizeof(TLSF_AllocatorImpl) );
+	void* ptr = GlobalAllocator( sizeof(TLSF_AllocatorImpl) );
 	m_Impl = new (ptr) TLSF_AllocatorImpl( size );
 }
 

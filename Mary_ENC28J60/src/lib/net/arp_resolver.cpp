@@ -5,7 +5,6 @@
  *      Author: hogehogei
  */
 
-#include <cstring>
 #include "lib/net/arp_resolver.hpp"
 #include "lib/net/internet_layer.hpp"
 #include "lib/net/link_layer.hpp"
@@ -18,7 +17,9 @@ ARP_ResolveResult ARP_Table::Resolve( uint32_t ipaddr )
 	int idx = 0;
 	if( search_ARPEntry( ipaddr, &idx ) ){
 		result.ipaddr = ipaddr;
-		std::memcpy( result.hwaddr, m_ARP_Tbl[idx].hwaddr, sizeof(result.hwaddr) );
+		for( int i = 0; i < 6; ++i ){
+			result.hwaddr[i] = m_ARP_Tbl[idx].hwaddr[i];
+		}
 		result.is_resolved = true;
 	}
 
@@ -30,7 +31,9 @@ void ARP_Table::Register( uint32_t ipaddr, const uint8_t* hwaddr )
 	ARP_Entry entry;
 
 	entry.ipaddr = ipaddr;
-	std::memcpy( entry.hwaddr, hwaddr, sizeof(entry.hwaddr) );
+	for( int i = 0; i < 6; ++i ){
+		entry.hwaddr[i] = hwaddr[i];
+	}
 
 	m_ARP_Tbl.Push( entry );
 }
@@ -133,7 +136,8 @@ bool ARP_RequestQueue::isRegistered_Request( uint32_t ipaddr )
 	return is_found;
 }
 
-
+ARP_Resolver::ARP_Resolver()
+{}
 
 ARP_Resolver& ARP_Resolver::Instance()
 {
@@ -226,6 +230,35 @@ PacketPtr Create_ARP_Request( const uint8_t* srcmac, uint32_t srcip, uint32_t ds
 	arp.DstMacAddr( arp_dstmac );
 	arp.SrcIpAddr( srcip );
 	arp.DstIpAddr( dstip );
+
+	return packet;
+}
+
+PacketPtr Create_ARP_Reply( const uint8_t* src_macaddr,
+							uint32_t src_ipaddr,
+							const uint8_t* dst_macaddr,
+							uint32_t dst_ipaddr
+							)
+{
+	if( src_macaddr == nullptr || dst_macaddr == nullptr ){
+		return PacketPtr();
+	}
+
+	PacketPtr packet = Create_ARP_Packet();
+	if( packet.isNull() ){
+		return packet;
+	}
+
+	ARP arp = packet->Get_ARP();
+	arp.HwType( 0x0001 );			// Ethernet
+	arp.Protocol( 0x0800 );			// TCP/IP
+	arp.Hlen( 6 );					// MAC Address 長
+	arp.Plen( 4 );					// IPv4 を表す
+	arp.OpCode( 0x0002 );			// ARP Reply
+	arp.SrcMacAddr( src_macaddr );
+	arp.DstMacAddr( dst_macaddr );
+	arp.SrcIpAddr( src_ipaddr );
+	arp.DstIpAddr( dst_ipaddr );
 
 	return packet;
 }

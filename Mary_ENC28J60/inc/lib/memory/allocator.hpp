@@ -11,12 +11,13 @@
 
 #include <cstdint>
 
-constexpr uint32_t k_MemoryPoolSize = 4096 + 512;
+constexpr uint32_t k_MemoryPoolSize = 4096 + 1024;
 constexpr uint32_t k_AlignmentSize  = 4;				//! メモリアライン  power-of-twoであること
 
 constexpr uint32_t k_MemoryPool_New_Size = 4096;
 
-void* allocate( uint32_t size );
+void* GlobalAllocator( uint32_t size );
+void Initialize_Allocator();
 
 //! C++11 Global operator new/delete
 void* operator new( std::size_t size );
