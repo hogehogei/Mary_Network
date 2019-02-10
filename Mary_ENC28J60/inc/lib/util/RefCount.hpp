@@ -28,7 +28,7 @@ public:
     bool release()
     {
         --mCount;
-        return mCount == 0;
+        return mCount <= 0;
     }
     
 private:

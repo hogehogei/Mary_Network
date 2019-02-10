@@ -8,6 +8,7 @@
 #include "lib/net/link_layer.hpp"
 #include "lib/net/internet_layer.hpp"
 #include "lib/net/arp_resolver.hpp"
+#include "uart.h"
 
 LinkLayer::LinkLayer()
 {}
@@ -45,6 +46,10 @@ const uint8_t* LinkLayer::GetMacAddr( uint8_t interface_id )
 
 bool LinkLayer::Send( PacketPtr packet, uint8_t interface_id, const uint8_t* dst_macaddr, uint16_t type )
 {
+	if( packet.isNull() ){
+		return false;
+	}
+
 	Eth_If ethif = m_Port[interface_id].ethif;
 	Ethernet ethhdr = packet->Get_Eth();
 
@@ -79,6 +84,10 @@ void LinkLayer::RecvPort( uint8_t interface_id, Eth_If ethif )
 
 bool LinkLayer::RxFilter_MacAddr( uint8_t interface_id, const PacketPtr& packet )
 {
+	if( packet.isNull() ){
+		return false;
+	}
+
 	Eth_If ethif = m_Port[interface_id].ethif;
 	Ethernet ethhdr = packet->Get_Eth();
 
@@ -94,6 +103,10 @@ bool LinkLayer::RxFilter_MacAddr( uint8_t interface_id, const PacketPtr& packet 
 
 void LinkLayer::PacketPass_UpperLayer( uint8_t interface_id, const PacketPtr& packet )
 {
+	if( packet.isNull() ){
+		return;
+	}
+
 	Ethernet ethhdr = packet->Get_Eth();
 
 	if( ethhdr.Type() == k_EthType_IPv4 ){

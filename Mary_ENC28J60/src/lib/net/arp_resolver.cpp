@@ -9,6 +9,8 @@
 #include "lib/net/internet_layer.hpp"
 #include "lib/net/link_layer.hpp"
 
+#include "uart.h"
+
 ARP_ResolveResult ARP_Table::Resolve( uint32_t ipaddr )
 {
 	ARP_ResolveResult result;
@@ -28,6 +30,12 @@ ARP_ResolveResult ARP_Table::Resolve( uint32_t ipaddr )
 
 void ARP_Table::Register( uint32_t ipaddr, const uint8_t* hwaddr )
 {
+	//　すでにエントリがある場合は登録しない
+	int idx;
+	if( search_ARPEntry( ipaddr, &idx ) ){
+		return;
+	}
+
 	ARP_Entry entry;
 
 	entry.ipaddr = ipaddr;
@@ -60,7 +68,7 @@ void ARP_RequestQueue::Register( uint32_t ipaddr )
 	if( !isRegistered_Request( ipaddr ) ){
 		ARP_RequestInfo request;
 		request.tbl_delete_timer	= 0;
-		request.arp_request_timer	= 0;
+		request.arp_request_timer	= k_ARPRequest_SendInterval;
 		request.dst_ipaddr 			= ipaddr;
 		request.is_complete			= false;
 
@@ -102,6 +110,16 @@ void ARP_RequestQueue::Update()
 
 void ARP_RequestQueue::send_ARP_Request( const ARP_RequestInfo& req )
 {
+	/*
+	unsigned stackpointer = 0;
+	asm volatile (
+			"mov %[stptr], r13;"
+			: [stptr] "+r" (stackpointer)
+			:
+			:);
+	UART_HexPrint( (uint8_t*)&stackpointer, 4 );
+	*/
+
 	InternetLayer& l3 = InternetLayer::Instance();
 	uint8_t interface_id = 0;
 	if( !l3.GetInterface_ByDestRoute( req.dst_ipaddr, &interface_id ) ){
@@ -116,6 +134,7 @@ void ARP_RequestQueue::send_ARP_Request( const ARP_RequestInfo& req )
 	LinkLayer& l2 = LinkLayer::Instance();
 	uint8_t mac_broadcast[] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
 	const uint8_t* srcmac = l2.GetMacAddr( interface_id );
+
 	PacketPtr arp_request = Create_ARP_Request( srcmac, srcip, req.dst_ipaddr );
 	l2.Send( arp_request, interface_id, mac_broadcast, k_EthType_ARP );
 }
@@ -127,7 +146,7 @@ bool ARP_RequestQueue::isRegistered_Request( uint32_t ipaddr )
 	bool is_found = false;
 	for( uint32_t i = 0; i < size; ++i ){
 		const ARP_RequestInfo& req = m_ARP_RequestQueue[i];
-		if( ipaddr == req.dst_ipaddr ){
+		if( req.is_complete == false && ipaddr == req.dst_ipaddr ){
 			is_found = true;
 			break;
 		}
@@ -158,6 +177,10 @@ ARP_ResolveResult ARP_Resolver::Resolve( uint32_t src_ipaddr, uint32_t dst_ipadd
 
 bool ARP_Resolver::Process_ARP_Packet( const PacketPtr& arppkt )
 {
+	if( arppkt.isNull() ){
+		return false;
+	}
+
 	bool result = true;
 	ARP arphdr = arppkt->Get_ARP();
 
@@ -166,10 +189,12 @@ bool ARP_Resolver::Process_ARP_Packet( const PacketPtr& arppkt )
 		process_ARP_Request( arppkt );
 		break;
 	case k_ARP_Operation_ARP_Reply:
+		UART_Print( "process arp reply" );
 		m_ARP_Tbl.Register( arphdr.SrcIpAddr(), arphdr.SrcMacAddr() );
 		m_ARP_Request.Remove( arphdr.SrcIpAddr() );
 		break;
 	default:
+		UART_Print( "unknown" );
 		result = false;
 		break;
 	}
@@ -179,6 +204,9 @@ bool ARP_Resolver::Process_ARP_Packet( const PacketPtr& arppkt )
 
 void ARP_Resolver::process_ARP_Request( const PacketPtr& arppkt )
 {
+	if( arppkt.isNull() ){
+		return;
+	}
 
 	ARP arphdr = arppkt->Get_ARP();
 
@@ -187,7 +215,7 @@ void ARP_Resolver::process_ARP_Request( const PacketPtr& arppkt )
 
 	// ARP Request のあて先IPアドレスが自分宛か調べる
 	uint8_t interface_id = 0;
-	uint32_t own_ipaddr = arphdr.SrcIpAddr();
+	uint32_t own_ipaddr = arphdr.DstIpAddr();
 	InternetLayer& l3 = InternetLayer::Instance();
 	bool is_own_ipaddr = l3.GetInterface_ByIPAddr( own_ipaddr, &interface_id );
 	// 自分宛じゃなければ、ARP Request は無視する
@@ -197,8 +225,8 @@ void ARP_Resolver::process_ARP_Request( const PacketPtr& arppkt )
 
 	// 自分宛なので、ARP Reply を送信
 	LinkLayer& l2 = LinkLayer::Instance();
-	const uint8_t* src_macaddr = l2.GetMacAddr( interface_id );
-	PacketPtr arp_reply = Create_ARP_Reply( src_macaddr, own_ipaddr, arphdr.SrcMacAddr(), arphdr.SrcIpAddr() );
+	const uint8_t* own_macaddr = l2.GetMacAddr( interface_id );
+	PacketPtr arp_reply = Create_ARP_Reply( own_macaddr, own_ipaddr, arphdr.SrcMacAddr(), arphdr.SrcIpAddr() );
 
 	l2.Send( arppkt, interface_id, arphdr.SrcMacAddr(), k_EthType_ARP );
 }

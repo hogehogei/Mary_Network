@@ -10,6 +10,7 @@
 #include "lib/net/arp_resolver.hpp"
 #include "lib/net/icmp_client.hpp"
 
+#include "uart.h"
 
 uint16_t InternetLayer::s_IP_PktID = 0;
 
@@ -101,12 +102,19 @@ bool InternetLayer::AddRoute( const RoutingEntry& entry )
 
 void InternetLayer::Send( PacketPtr packet, uint32_t dst_ipaddr )
 {
+	if( packet.isNull() ){
+		return;
+	}
+
 	// 宛先ルートの検索
 	RoutingEntry route;
 	if( !m_RoutingTbl.SearchRoute( dst_ipaddr, &route ) ){
 		// 宛先ルートがないので送れません
 		return;
 	}
+
+	uint32_t src_ipaddr;
+	GetIPAddr_ByInterface( route.interface_id, &src_ipaddr );
 
 	IPv4 ipv4 = packet->Get_IPv4();
 	ipv4.Version( 4 );										// IPv4
@@ -116,14 +124,19 @@ void InternetLayer::Send( PacketPtr packet, uint32_t dst_ipaddr )
 	ipv4.Flag( 0x02 );										// Flag フラグメントを許可しない
 	ipv4.Offset( 0x00 );									// Offset
 	ipv4.TTL( 128 );										// Time to Live
-	ipv4.SrcAddr( route.ipaddr );							// 宛先アドレス
-	ipv4.DstAddr( dst_ipaddr );								// 送信元アドレス
+	ipv4.SrcAddr( src_ipaddr );								// 送信元アドレス
+	ipv4.DstAddr( dst_ipaddr );								//　宛先アドレス
+	ipv4.CalculateChkSum();
 
 	m_SendQueue.Push( packet );
 }
 
 void InternetLayer::Recv( uint8_t interface_id, const PacketPtr& packet )
 {
+	if( packet.isNull() ){
+		return;
+	}
+
 	// IP Filter
 	if( !RxFilter_IPv4Addr( interface_id, packet ) ){
 		// フィルタ処理ではじかれたのでパケットを捨てる
@@ -200,9 +213,11 @@ bool InternetLayer::GetNetMask_ByInterface( uint8_t interface_id, uint32_t* netm
 void InternetLayer::SendQueue_Process()
 {
 	int size = m_SendQueue.Size();
+
 	for( int i = 0; i < size; ++i ){
 		PacketPtr packet = m_SendQueue.Front();
 		m_SendQueue.Pop();
+
 		if( !TrySendPacket( packet ) ){
 			m_SendQueue.Push( packet );
 		}
@@ -211,6 +226,10 @@ void InternetLayer::SendQueue_Process()
 
 bool InternetLayer::TrySendPacket( PacketPtr packet )
 {
+	if( packet.isNull() ){
+		return false;
+	}
+
 	// ルート検索する
 	RoutingEntry nexthop;
 	IPv4 ipv4 = packet->Get_IPv4();
@@ -246,6 +265,10 @@ bool InternetLayer::TrySendPacket( PacketPtr packet )
 
 bool InternetLayer::RxFilter_IPv4Addr( uint8_t interface_id, const PacketPtr& packet )
 {
+	if( packet.isNull() ){
+		return false;
+	}
+
 	IPv4 ipv4hdr = packet->Get_IPv4();
 
 	uint32_t pkt_ipaddr = ipv4hdr.DstAddr();

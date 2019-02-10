@@ -332,7 +332,6 @@ void NMI_Handler(void)
 __attribute__ ((section(".after_vectors")))
 void HardFault_Handler(void)
 {
-	/*
 	static uint32_t cnt = 0;
 	TurnOffLED( LED_COLOR_RED | LED_COLOR_GREEN | LED_COLOR_BLUE );
 
@@ -345,7 +344,6 @@ void HardFault_Handler(void)
 			TurnOffLED( LED_COLOR_RED );
 		}
 	}
-	*/
 }
 __attribute__ ((section(".after_vectors")))
 void SVC_Handler(void)

@@ -34,7 +34,7 @@ uint8_t IPv4::HdrLen() const
 
 void IPv4::HdrLen( uint8_t hdr_len )
 {
-	uint8_t v = ((m_IPv4_Hdr->version_hdrlen << 4) & 0xF0) | (hdr_len & 0x0F);
+	uint8_t v = (m_IPv4_Hdr->version_hdrlen & 0xF0) | (hdr_len & 0x0F);
 	m_IPv4_Hdr->version_hdrlen = v;
 }
 

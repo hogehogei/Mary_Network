@@ -64,12 +64,8 @@ public:
 	void Pop()
 	{
 		if( !Empty() ){
-			if( m_IdxEnd > 0 ){
-				--m_IdxEnd;
-			}
-			else {
-				m_IdxEnd = k_Size;
-			}
+			// 次に取り出す値を捨てる
+			m_IdxBegin = (m_IdxBegin + 1) % (k_Size + 1);
 		}
 	}
 
@@ -78,8 +74,7 @@ public:
 		uint32_t next_idx = (m_IdxEnd + 1) % (k_Size + 1);
 
 		if( next_idx == m_IdxBegin ){
-			// 次に取り出す値を捨てる
-			m_IdxBegin = (m_IdxBegin + 1) % (k_Size + 1);
+			Pop();
 		}
 
 		m_Buffer[m_IdxEnd] = value;

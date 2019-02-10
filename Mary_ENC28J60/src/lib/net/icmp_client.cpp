@@ -26,6 +26,10 @@ ICMP_Client& ICMP_Client::Instance()
 
 void ICMP_Client::Recv( const PacketPtr& packet )
 {
+	if( packet.isNull() ){
+		return;
+	}
+
 	// ICMP Header の解析
 	ICMP icmp = packet->Get_ICMP();
 
@@ -37,8 +41,12 @@ void ICMP_Client::Recv( const PacketPtr& packet )
 
 void ICMP_Client::Ping( uint32_t dst_ipaddr )
 {
-	uint16_t icmp_payload_len = 32;
+	uint16_t icmp_payload_len = 32 + 4;
 	PacketPtr packet = Create_ICMP_Packet( icmp_payload_len );
+	if( packet.isNull() ){
+		return;
+	}
+
 
 	IPv4 ipv4 = packet->Get_IPv4();
 	ipv4.Protocol( 0x01 );						// ICMP
@@ -54,7 +62,7 @@ void ICMP_Client::Ping( uint32_t dst_ipaddr )
 	ByteOrder::SetUint16( data+2, ++s_ICMPEchoSeqID );	// ICMP sequence number
 
 	int i = 0;
-	// ダミーデータ作成  Windowsっぽい感じで
+	//ダミーデータ作成  Windowsっぽい感じで
 	for( i = 0; i < 32; ++i ){
 		data[4+i] = 0x61 + (i % 0x17);
 	}

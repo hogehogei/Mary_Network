@@ -83,13 +83,21 @@ public:
 	 * @param	[in]	data		送信データ配列
 	 * @param	[in]	datalen		送信データ長
 	 */
-	uint32_t Send( const uint16_t* data, uint32_t datalen );
+	uint32_t Send_U16( const uint16_t* data, uint32_t datalen );
+
+	/**
+	 * @brief	データ送信
+	 * @param	[in]	data		送信データ配列
+	 * @param	[in]	datalen		送信データ長
+	 */
+	uint32_t Send_U8( const uint8_t* data, uint32_t datalen );
+
 	/**
 	 * @brief	データ受信
 	 * @param	[out]	dst			受信データ格納先
 	 * @param	[in]	dstlen		受信データ格納先の配列長
 	 */
-	uint32_t Recv( uint16_t* dst, uint32_t dstlen );
+	uint32_t Recv_U16( uint16_t* dst, uint32_t dstlen );
 
 private:
 

@@ -7,6 +7,7 @@
 
 #include "lib/memory/allocator.hpp"
 #include "lib/memory/Exlib_TLSFAllocator.hpp"
+#include "uart.h"
 
 __attribute__ ((aligned(32))) static uint8_t  s_MemoryPool[k_MemoryPoolSize];
 static uint32_t s_AllocatedSize = 0;
@@ -37,11 +38,13 @@ void Initialize_Allocator()
 void* operator new( std::size_t size )
 {
 	return s_Allocator.allocate( size );
+	//return GlobalAllocator( size );
 }
 
 void* operator new[]( std::size_t size )
 {
 	return s_Allocator.allocate( size );
+	//return GlobalAllocator( size );
 }
 
 void operator delete( void* ptr )

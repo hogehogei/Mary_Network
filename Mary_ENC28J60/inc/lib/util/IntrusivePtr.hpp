@@ -14,7 +14,7 @@ class IntrusivePtr
 public:
     
     IntrusivePtr()
-        : mPtr(0)
+        : mPtr( nullptr )
     {}
 
     /**
@@ -94,7 +94,7 @@ private:
     void destroy()
     {
         delete mPtr;
-        mPtr = 0;
+        mPtr = nullptr;
     }
     
     T* mPtr;

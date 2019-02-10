@@ -12,7 +12,7 @@
 #include <cstdint>
 
 constexpr uint32_t k_MemoryPoolSize = 4096 + 1024;
-constexpr uint32_t k_AlignmentSize  = 4;				//! メモリアライン  power-of-twoであること
+constexpr uint32_t k_AlignmentSize  = 4;				//! メモリアライン 4byte
 
 constexpr uint32_t k_MemoryPool_New_Size = 4096;
 

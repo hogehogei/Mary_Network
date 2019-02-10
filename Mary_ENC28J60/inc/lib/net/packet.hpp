@@ -22,7 +22,7 @@ class Packet : public exlib::RefCount
 public:
 
 	Packet();
-	Packet( uint16_t datasize );
+	Packet( uint16_t datasize, uint8_t* datap );
 	~Packet() noexcept;
 
 	const uint8_t* Head() const;
@@ -42,6 +42,8 @@ private:
 };
 
 using PacketPtr = exlib::IntrusivePtr<Packet>;
+
+void PrintPacket( const PacketPtr& packet );
 
 PacketPtr Create_Packet( uint32_t packet_size );
 PacketPtr Create_ARP_Packet();

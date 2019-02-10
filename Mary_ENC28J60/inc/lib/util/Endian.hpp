@@ -83,7 +83,7 @@ public:
     static void SetUint16( uint8_t* p, uint16_t data )
     {
     	p[0] = (data >> 8) & 0xFF;
-    	p[1] = data >> 8;
+    	p[1] = data & 0xFF;
     }
 
     static void SetUint32( uint8_t* p, uint32_t data )

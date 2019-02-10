@@ -170,7 +170,7 @@ void ENC28J60::WriteBufferMem( const uint8_t* data, uint16_t len )
 	m_CS.Lo();
 	// Write buffer memory command
 	m_SPI.TxRx( _WBM() );
-	m_SPI.Send( reinterpret_cast<const uint16_t*>(data), len );
+	m_SPI.Send_U8( data, len );
 	m_CS.Hi();
 	__enable_irq();
 }
@@ -179,16 +179,22 @@ void ENC28J60::WriteBufferMem( const uint8_t* data, uint16_t len )
 // Public functions
 bool ENC28J60::Send( const PacketPtr& frame )
 {
+	// リンクアップしていないなら送信しない
+	if( !isLinkUp() ){
+		return false;
+	}
+#if 1
 	// TXRTX:1 なら送信中なので待つ
 	while( ReadCR(ECON1) & 0x08 ) {
-		/*
 		// TXERIF : 送信エラー発生ならリセット
 		if( ReadCR(EIR) & 0x02 ){
 			BitFieldSet( ECON1, 0x80 );
 			BitFieldClear( ECON1, 0x80 );
+
+			return false;
 		}
-		*/
 	}
+#endif
 
 	uint16_t tx_start_addr = TX_BUFFER_START;
 	uint16_t tx_end_addr = (TX_BUFFER_START + frame->Size());
@@ -209,6 +215,9 @@ bool ENC28J60::Send( const PacketPtr& frame )
 	WriteBufferMem( frame->Head(), frame->Size() );
 
 	BitFieldSet( ECON1, 0x08 );    // TXRTS: Transmit Request to Send Enable
+
+	PrintPacket( frame );
+	UART_Print( "ENC28J60 Send Complete" );
 
 	return true;
 }
@@ -248,7 +257,19 @@ bool ENC28J60::Recv( PacketPtr* frame )
 
 	// 読み込みポインタを次のアドレスに進める
 	// Rev.B4 Errata シート参照
+	/*
 	if( (m_Rx_NextPktPtr - 1) < RX_BUFFER_START || (m_Rx_NextPktPtr - 1) > RX_BUFFER_END ){
+		WriteCR( ERXRDPTL, RX_BUFFER_END & 0xFF );
+		WriteCR( ERXRDPTH, RX_BUFFER_END >> 8 );
+	}
+	else {
+		WriteCR( ERXRDPTL, (m_Rx_NextPktPtr - 1) & 0xFF );
+		WriteCR( ERXRDPTH, (m_Rx_NextPktPtr - 1) >> 8 );
+	}
+	*/
+	// Errata #14
+	// ERXRDPT レジスタは 奇数アドレスだけ書きこむ必要がある
+	if( m_Rx_NextPktPtr == RX_BUFFER_START ){
 		WriteCR( ERXRDPTL, RX_BUFFER_END & 0xFF );
 		WriteCR( ERXRDPTH, RX_BUFFER_END >> 8 );
 	}
@@ -261,6 +282,7 @@ bool ENC28J60::Recv( PacketPtr* frame )
 	BitFieldSet( ECON2, (1 << 6) );
 
 	*frame = rx_frame;
+	UART_Print( "ENC28J60 Recv Complete" );
 
 	return status == RECV_VALIDPKT ? true : false;
 }
@@ -294,7 +316,7 @@ uint8_t ENC28J60::Get_RemainPacketCount()
 
 int ENC28J60::Interrupt_Callback()
 {
-	DisableInterrupt();
+	//DisableInterrupt();
 	int status = 0;
 	uint8_t eir = ReadCR(EIR);
 
@@ -327,11 +349,11 @@ int ENC28J60::Interrupt_Callback()
 
 	// 割り込みを有効にする
 	// パケット受信割り込みは、今送られてきたパケットをすべて処理したら割り込み許可する
-	EnableTxRxErrorInterrupt();
-	if( get_RxRemainPacketCount() == 0 ){
+	//EnableTxRxErrorInterrupt();
+	//if( get_RxRemainPacketCount() == 0 ){
 		// パケットを受信しつくしたので割り込み有効に
-		EnableRecvPktInterrupt();
-	}
+		//EnableRecvPktInterrupt();
+	//}
 
 	if( status & INT_LINKCHANGE ){
 		UART_Print( "PHY link status change" );
@@ -421,7 +443,7 @@ void ENC28J60::Init_Interrupt()
 {
 	// 割り込み有効
 	EnableTxRxErrorInterrupt();
-	EnableRecvPktInterrupt();
+	//EnableRecvPktInterrupt();
 
 	UART_Print( "Interrupt Setting" );
 }

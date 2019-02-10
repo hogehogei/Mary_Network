@@ -88,7 +88,7 @@ uint16_t SPI::TxRx( uint16_t txdata )
 	return rxdata;
 }
 
-uint32_t SPI::Send( const uint16_t* data, uint32_t datalen )
+uint32_t SPI::Send_U16( const uint16_t* data, uint32_t datalen )
 {
 	uint32_t i = 0;
 	for( i = 0; i < datalen; ++i ){
@@ -99,7 +99,18 @@ uint32_t SPI::Send( const uint16_t* data, uint32_t datalen )
 	return i;
 }
 
-uint32_t SPI::Recv( uint16_t* dst, uint32_t dstlen )
+uint32_t SPI::Send_U8( const uint8_t* data, uint32_t datalen )
+{
+	uint32_t i = 0;
+	for( i = 0; i < datalen; ++i ){
+		TxRx( data[i] );
+	}
+
+	// 送信したバイト数を返す
+	return i;
+}
+
+uint32_t SPI::Recv_U16( uint16_t* dst, uint32_t dstlen )
 {
 	uint32_t i = 0;
 	for( i = 0; i < dstlen; ++i ){

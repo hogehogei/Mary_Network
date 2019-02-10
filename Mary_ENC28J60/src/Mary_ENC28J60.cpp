@@ -27,6 +27,8 @@
 #include "lib/util/Endian.hpp"
 #include "lib/memory/allocator.hpp"
 #include "lib/net/link_layer.hpp"
+#include "lib/net/arp_resolver.hpp"
+#include "lib/net/internet_layer.hpp"
 #include "lib/net/icmp_client.hpp"
 
 using ByteOrder = exlib::Endian<exlib::BigEndian>;
@@ -111,7 +113,16 @@ int main(void) {
 	int led_idx = 0;
 	TurnOnLED( skLEDColorTbl[led_idx] );
 
-	uint8_t tmp[] = { 192, 168, 24, 2 };
+	unsigned stackpointer = 0;
+	asm volatile (
+			"mov %[stptr], r13;"
+			: [stptr] "+r" (stackpointer)
+			:
+			:);
+	UART_HexPrint( (uint8_t*)&stackpointer, 4 ); UART_NewLine();
+
+
+	uint8_t tmp[] = { 192, 168, 24, 128 };
 	uint32_t target_ipaddr = ByteOrder::GetUint32( tmp );
 	// main loop
 	while(1){
@@ -125,7 +136,7 @@ int main(void) {
 
 
 		if( g_PingSendTimer >= 1000 ){
-			//UART_Print( "Send Ping" );
+			UART_Print( "Send Ping" );
 			g_PingSendTimer = 0;
 
 			ICMP_Client& icmp = ICMP_Client::Instance();
@@ -139,6 +150,13 @@ int main(void) {
 			led_idx = (led_idx + 1) % sk_LEDColorTbl_Size;
 			TurnOnLED( skLEDColorTbl[led_idx] );
 		}
+
+		ARP_Resolver& arp_resolver = ARP_Resolver::Instance();
+		arp_resolver.Update();
+
+		InternetLayer& l3 = InternetLayer::Instance();
+		l3.SendQueue_Process();
+
 		asm( "wfi" );
 	}
 

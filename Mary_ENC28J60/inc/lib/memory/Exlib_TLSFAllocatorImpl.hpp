@@ -417,16 +417,6 @@ private:
         getIndex( memsize, &fli, &sli );
         index = calcFreeBlockIndex( fli, sli ) - 1;
 
-        //UART_HexPrint( (uint8_t*)&memsize, 4 );UART_NewLine();
-    	//TurnOnLED( LED_COLOR_BLUE );
-
-    	//unsigned t = mFreeBlock.Size();
-    	//UART_HexPrint( (uint8_t*)&t, 4 ); UART_NewLine();
-    	//UART_HexPrint( (uint8_t*)&index, 4 );UART_NewLine();
-    	//mFreeBlock[0] = nullptr;
-    	//unsigned v = (unsigned)mFreeBlock[0];
-    	//UART_HexPrint( (uint8_t*)&v, 4 ); UART_NewLine();
-
         // フリーリストに追加
         if( mFreeBlock[index] ){
             freeblock->setNextLink( mFreeBlock[index] );

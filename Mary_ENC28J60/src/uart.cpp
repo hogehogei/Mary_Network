@@ -185,6 +185,11 @@ int UART_IsPresentRecvData(void)
 	return is_rxbuf_present_data || is_rxfifo_present_data;
 }
 
+void UART_PrintChar( const char c )
+{
+	UART_Send( (const uint8_t*)&c, 1 );
+}
+
 void UART_Print( const char* str )
 {
 	uint32_t len = 0;
