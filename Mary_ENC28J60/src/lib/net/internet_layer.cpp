@@ -38,16 +38,18 @@ bool RoutingTable::SearchRoute( uint32_t dst_ipaddr, RoutingEntry* next_hop ) co
 {
 	bool result = false;
 	uint8_t	metric = 255;
+	uint32_t netmask = 0;
 
-	// @TODO	Longest Match を実装する
-	//			現在の実装では　LongestMatch になっていない
 	for( uint32_t i = 0; i < m_RoutingTbl_Last; ++i ){
 		const RoutingEntry entry = m_Entry[m_RoutingTbl_Last];
 		if( (entry.ipaddr & entry.netmask) == (dst_ipaddr & entry.netmask) ){
-			if( entry.metric < metric ){
-				*next_hop = entry;
-				metric = entry.metric;
-				result = true;
+			if( entry.netmask >= netmask ){
+				netmask = entry.netmask;
+				if( entry.metric < metric ){
+					*next_hop = entry;
+					metric = entry.metric;
+					result = true;
+				}
 			}
 		}
 	}
@@ -117,9 +119,11 @@ void InternetLayer::Send( PacketPtr packet, uint32_t dst_ipaddr )
 	GetIPAddr_ByInterface( route.interface_id, &src_ipaddr );
 
 	IPv4 ipv4 = packet->Get_IPv4();
+	uint16_t total_len = packet->Size() - sizeof(Ether_Hdr);
 	ipv4.Version( 4 );										// IPv4
 	ipv4.HdrLen( 5 );										// 32bit*5 = 160bit = 20byte
 	ipv4.Tos( 0x00 );										// Type of service
+	ipv4.TotalLen( total_len );								// Total Length
 	ipv4.Id( ++s_IP_PktID );								// Packet ID
 	ipv4.Flag( 0x02 );										// Flag フラグメントを許可しない
 	ipv4.Offset( 0x00 );									// Offset
