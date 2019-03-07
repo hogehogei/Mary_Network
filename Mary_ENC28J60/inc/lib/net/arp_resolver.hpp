@@ -17,8 +17,8 @@
 constexpr uint32_t k_ARPTbl_Size = 10;
 constexpr uint32_t k_ARP_RequestQueue_Size = 10;
 
-constexpr uint32_t k_ARPRequest_TimeOut = 6000;
-constexpr uint32_t k_ARPRequest_SendInterval = 100;
+constexpr uint32_t k_ARPRequest_TimeOut = 30000;
+constexpr uint32_t k_ARPRequest_SendInterval = 1000;
 
 struct ARP_RequestInfo
 {

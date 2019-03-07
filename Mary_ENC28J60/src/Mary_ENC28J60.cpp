@@ -50,8 +50,7 @@ int g_LEDCount = 0;
 
 uint32_t g_PacketRecvTimer = 0;
 uint32_t g_PingSendTimer = 0;
-
-int  gIsSetSrcHostInfo = 1;
+uint32_t g_ARP_UpdateTimer = 0;
 
 extern unsigned int __init_array_start;
 extern unsigned int __init_array_end;
@@ -62,6 +61,7 @@ void Update1msTimer(void)
 	++g_PacketRecvTimer;
 	++g_PingSendTimer;
 	++g_LEDCount;
+	++g_ARP_UpdateTimer;
 }
 
 
@@ -151,8 +151,10 @@ int main(void) {
 			TurnOnLED( skLEDColorTbl[led_idx] );
 		}
 
-		ARP_Resolver& arp_resolver = ARP_Resolver::Instance();
-		arp_resolver.Update();
+		if( g_ARP_UpdateTimer >= 10 ){
+			ARP_Resolver& arp_resolver = ARP_Resolver::Instance();
+			arp_resolver.Update();
+		}
 
 		InternetLayer& l3 = InternetLayer::Instance();
 		l3.SendQueue_Process();

@@ -51,7 +51,7 @@ ARP Packet::Get_ARP()
 
 ICMP Packet::Get_ICMP()
 {
-	uint16_t payload = m_Len - sizeof(Ether_Hdr) + sizeof(IPv4_Hdr) + sizeof(ICMP_Hdr);
+	uint16_t payload = m_Len - (sizeof(Ether_Hdr) + sizeof(IPv4_Hdr) + sizeof(ICMP_Hdr));
 	return ICMP( m_RawPacket + sizeof(Ether_Hdr) + sizeof(IPv4_Hdr), payload );
 }
 

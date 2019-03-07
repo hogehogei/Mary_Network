@@ -228,7 +228,7 @@ void ARP_Resolver::process_ARP_Request( const PacketPtr& arppkt )
 	const uint8_t* own_macaddr = l2.GetMacAddr( interface_id );
 	PacketPtr arp_reply = Create_ARP_Reply( own_macaddr, own_ipaddr, arphdr.SrcMacAddr(), arphdr.SrcIpAddr() );
 
-	l2.Send( arppkt, interface_id, arphdr.SrcMacAddr(), k_EthType_ARP );
+	l2.Send( arp_reply, interface_id, arphdr.SrcMacAddr(), k_EthType_ARP );
 }
 
 void ARP_Resolver::Update()
