@@ -9,6 +9,7 @@ CPP_SRCS += \
 ../src/cr_cpp_config.cpp \
 ../src/cr_startup_lpc11xx.cpp \
 ../src/global.cpp \
+../src/initialize.cpp \
 ../src/interrupt.cpp \
 ../src/led.cpp \
 ../src/network.cpp \
@@ -26,6 +27,7 @@ OBJS += \
 ./src/cr_startup_lpc11xx.o \
 ./src/crp.o \
 ./src/global.o \
+./src/initialize.o \
 ./src/interrupt.o \
 ./src/led.o \
 ./src/network.o \
@@ -39,6 +41,7 @@ CPP_DEPS += \
 ./src/cr_cpp_config.d \
 ./src/cr_startup_lpc11xx.d \
 ./src/global.d \
+./src/initialize.d \
 ./src/interrupt.d \
 ./src/led.d \
 ./src/network.d \

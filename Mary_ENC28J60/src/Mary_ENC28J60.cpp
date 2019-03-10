@@ -18,12 +18,10 @@
 #include <cstdint>
 #include "LPC1100.h"
 #include "led.h"
-#include "timer32.h"
 #include "uart.h"
-#include "systick.h"
+#include "timer32.h"
+#include "initialize.hpp"
 #include "network.h"
-#include "ENC28J60.h"
-
 #include "lib/util/Endian.hpp"
 #include "lib/memory/allocator.hpp"
 #include "lib/net/link_layer.hpp"
@@ -34,6 +32,14 @@
 using ByteOrder = exlib::Endian<exlib::BigEndian>;
 
 // TODO: insert other definitions and declarations here
+
+// プロトタイプ宣言
+void Update_1ms_Timer();
+void Update_LED_Indicator();
+void Update_Network_Rx();
+void Update_ICMP_Send();
+void Update_ARP();
+void Update_Network_Tx();
 
 static const uint32_t skLEDColorTbl[] = {
 		LED_COLOR_RED,
@@ -47,117 +53,38 @@ static const uint32_t skLEDColorTbl[] = {
 static constexpr uint32_t sk_LEDColorTbl_Size = sizeof(skLEDColorTbl) / sizeof(uint32_t);
 
 int g_LEDCount = 0;
+int g_LED_Idx = 0;
 
 uint32_t g_PacketRecvTimer = 0;
 uint32_t g_PingSendTimer = 0;
 uint32_t g_ARP_UpdateTimer = 0;
-
-extern unsigned int __init_array_start;
-extern unsigned int __init_array_end;
-extern void call_static_initializers();
-
-void Update1msTimer(void)
-{
-	++g_PacketRecvTimer;
-	++g_PingSendTimer;
-	++g_LEDCount;
-	++g_ARP_UpdateTimer;
-}
-
-
+uint32_t g_Ping_TargetIP = 0;
 
 int main(void) {
 
     // TODO: insert code here
 
-	/* Configure BOD control (Reset on Vcc dips below 2.7V) */
-	BODCTRL = 0x13;
+	Initialize_CPU();
+	Initialize_Peripheral();
+	Call_Static_Initializers();
 
-	/* Configure system clock generator (36MHz system clock with IRC) */
-	MAINCLKSEL = 0;							/* Select IRC as main clock */
-	MAINCLKUEN = 0; MAINCLKUEN = 1;
-	FLASHCFG = (FLASHCFG & 0xFFFFFFFC) | 2;	/* Set wait state for flash memory (1WS) */
-#if 1
-	SYSPLLCLKSEL = 0;						/* Select IRC for PLL-in */
-	SYSPLLCLKUEN = 0; SYSPLLCLKUEN = 1;
-	SYSPLLCTRL = (3 - 1) | (2 << 6);		/* Set PLL parameters (M=3, P=4) */
-	PDRUNCFG &= ~0x80;						/* Enable PLL */
-	while ((SYSPLLSTAT & 1) == 0) ;			/* Wait for PLL locked */
-#endif
-	SYSAHBCLKDIV = 1;						/* Set system clock divisor (1) */
-	MAINCLKSEL = 3;							/* Select PLL-out as main clock */
-	MAINCLKUEN = 0; MAINCLKUEN = 1;
+	Timer32B1_SetCallback( Update_1ms_Timer );	// コールバック設定
+    Initialize_Allocator();						// メモリアロケータ初期化
+	Initialize_Network();						// ネットワーク初期化
 
-	SYSAHBCLKCTRL |= 0x1005F;
-
-	// UARTの初期化
-	Init_UART();
-	UART_Print( "Init_UART()" );
-	// オンボードLEDの初期化
-	Init_LED();
-	UART_Print( "Init_LED()" );
-	// Systick Timerの初期化
-	Init_Systick();
-	UART_Print( "Init_Systick()");
-	// Timer32B1 の初期化 パケット送信タイマーに用いる
-	Init_Timer32B1( 1000 );    // 1ms
-	Timer32B1_SetCallback( Update1msTimer );
-	UART_Print( "Init_Timer32B1()" );
-
-    call_static_initializers();
-
-    Initialize_Allocator();
-	// ネットワークの初期化
-	Initialize_Network();
-
-	int led_idx = 0;
-	TurnOnLED( skLEDColorTbl[led_idx] );
-
-	unsigned stackpointer = 0;
-	asm volatile (
-			"mov %[stptr], r13;"
-			: [stptr] "+r" (stackpointer)
-			:
-			:);
-	UART_HexPrint( (uint8_t*)&stackpointer, 4 ); UART_NewLine();
-
+	TurnOnLED( skLEDColorTbl[g_LED_Idx] );
 
 	uint8_t tmp[] = { 192, 168, 24, 128 };
-	uint32_t target_ipaddr = ByteOrder::GetUint32( tmp );
+	g_Ping_TargetIP = ByteOrder::GetUint32( tmp );
+
 	// main loop
 	while(1){
 
-		if( g_PacketRecvTimer >= 10 ){
-			g_PacketRecvTimer = 0;
-
-			LinkLayer& l2 = LinkLayer::Instance();
-			l2.Recv_AllInterface();
-		}
-
-
-		if( g_PingSendTimer >= 1000 ){
-			UART_Print( "Send Ping" );
-			g_PingSendTimer = 0;
-
-			ICMP_Client& icmp = ICMP_Client::Instance();
-			icmp.Ping( target_ipaddr );
-		}
-
-
-		if( g_LEDCount >= 1000 ){
-			g_LEDCount = 0;
-			TurnOffLED( skLEDColorTbl[led_idx] );
-			led_idx = (led_idx + 1) % sk_LEDColorTbl_Size;
-			TurnOnLED( skLEDColorTbl[led_idx] );
-		}
-
-		if( g_ARP_UpdateTimer >= 10 ){
-			ARP_Resolver& arp_resolver = ARP_Resolver::Instance();
-			arp_resolver.Update();
-		}
-
-		InternetLayer& l3 = InternetLayer::Instance();
-		l3.SendQueue_Process();
+		Update_LED_Indicator();
+		Update_Network_Rx();
+		Update_ICMP_Send();
+		Update_ARP();
+		Update_Network_Tx();
 
 		asm( "wfi" );
 	}
@@ -165,3 +92,55 @@ int main(void) {
     return 0 ;
 }
 
+void Update_1ms_Timer(void)
+{
+	++g_PacketRecvTimer;
+	++g_PingSendTimer;
+	++g_LEDCount;
+	++g_ARP_UpdateTimer;
+}
+
+void Update_LED_Indicator()
+{
+	if( g_LEDCount >= 1000 ){
+		g_LEDCount = 0;
+		TurnOffLED( skLEDColorTbl[g_LED_Idx] );
+		g_LED_Idx = (g_LED_Idx + 1) % sk_LEDColorTbl_Size;
+		TurnOnLED( skLEDColorTbl[g_LED_Idx] );
+	}
+}
+
+void Update_Network_Rx()
+{
+	if( g_PacketRecvTimer >= 10 ){
+		g_PacketRecvTimer = 0;
+
+		LinkLayer& l2 = LinkLayer::Instance();
+		l2.Recv_AllInterface();
+	}
+}
+
+void Update_ICMP_Send()
+{
+	if( g_PingSendTimer >= 1000 ){
+		UART_Print( "Send Ping" );
+		g_PingSendTimer = 0;
+
+		ICMP_Client& icmp = ICMP_Client::Instance();
+		icmp.Ping( g_Ping_TargetIP );
+	}
+}
+
+void Update_ARP()
+{
+	if( g_ARP_UpdateTimer >= 10 ){
+		ARP_Resolver& arp_resolver = ARP_Resolver::Instance();
+		arp_resolver.Update();
+	}
+}
+
+void Update_Network_Tx()
+{
+	InternetLayer& l3 = InternetLayer::Instance();
+	l3.SendQueue_Process();
+}

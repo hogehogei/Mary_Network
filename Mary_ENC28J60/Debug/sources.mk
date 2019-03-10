@@ -28,4 +28,5 @@ src \
 src/drv \
 src/lib/memory \
 src/lib/net \
+src/lib/util \
 
